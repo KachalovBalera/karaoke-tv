@@ -1,8 +1,8 @@
 {
-  "version": "1.0.2",
-  "versionCode": 2,
-  "apkUrl": "https://github.com/KachalovBalera/karaoke-tv/releases/download/v1.0.2/KaraokeTV_v1.0.2.apk",
-  "releaseNotes": "• Исправлена ошибка вылета при нажатии «Обновить сейчас»\n• Добавлены популярные песни во все 8 категорий караоке\n• Динамическое обновление подборки популярных песен при возврате на главный экран\n• Автоматическое закрытие плеера и переход в поиск песен после окончания трека",
+  "version": "1.0.4",
+  "versionCode": 4,
+  "apkUrl": "https://github.com/KachalovBalera/karaoke-tv/releases/download/v1.0.4/KaraokeTV_v1.0.4.apk",
+  "releaseNotes": "• Исправлена ошибка «Неправильная ссылка на видео» в RUTUBE (подключены проверенные официальные ID караоке-треков Rutube)\n• Плеер Rutube теперь загружается напрямую в полноэкранном режиме с поддержкой 1st-party cookies и правильного User-Agent\n• Добавлено автоматическое разрешение Rutube ID для всех популярных песен и категорий",
   "forceUpdate": false,
   "publishDate": "2026-11-02"
 }
