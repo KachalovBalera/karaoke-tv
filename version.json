@@ -1,8 +1,8 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "versionCode": 2,
-  "apkUrl": "https://github.com/KachalovBalera/karaoke-tv/releases/download/v1.0.1/KaraokeTV_v1.0.1.apk",
-  "releaseNotes": "• Полное обновление интерфейса Android TV под новый современный стиль\n• Поддержка каталога караоке с YouTube, VK Видео и RUTUBE\n• Управление со смартфона по QR-коду и калибровка звука для Soundcore Rave 3S\n• Система автообновления по воздуху (OTA) прямо через приложение",
+  "apkUrl": "https://github.com/KachalovBalera/karaoke-tv/releases/download/v1.0.2/KaraokeTV_v1.0.2.apk",
+  "releaseNotes": "• Исправлена ошибка вылета при нажатии «Обновить сейчас»\n• Добавлены популярные песни во все 8 категорий караоке\n• Динамическое обновление подборки популярных песен при возврате на главный экран\n• Автоматическое закрытие плеера и переход в поиск песен после окончания трека",
   "forceUpdate": false,
   "publishDate": "2026-11-02"
 }
