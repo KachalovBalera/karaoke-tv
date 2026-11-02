@@ -1,8 +1,8 @@
 {
-  "version": "1.0.4",
-  "versionCode": 4,
-  "apkUrl": "https://github.com/KachalovBalera/karaoke-tv/releases/download/v1.0.4/KaraokeTV_v1.0.4.apk",
-  "releaseNotes": "• Исправлена ошибка «Неправильная ссылка на видео» в RUTUBE (подключены проверенные официальные ID караоке-треков Rutube)\n• Плеер Rutube теперь загружается напрямую в полноэкранном режиме с поддержкой 1st-party cookies и правильного User-Agent\n• Добавлено автоматическое разрешение Rutube ID для всех популярных песен и категорий",
+  "version": "1.0.5",
+  "versionCode": 5,
+  "apkUrl": "https://github.com/KachalovBalera/karaoke-tv/releases/download/v1.0.5/KaraokeTV_v1.0.5.apk",
+  "releaseNotes": "• Подключен официальный YouTube Data API v3 для быстрого и точного поиска караоке-минусовок\n• Встроен рабочий API-ключ — ручной ввод с пульта больше не требуется\n• Умный поиск с приоритизацией видео с текстом на экране («с текстом», «минусовка с текстом»)\n• Автоматическая фильтрация клипов, реакций и обучающих видео\n• Обработка лимитов квоты и ошибок API с понятными уведомлениями",
   "forceUpdate": false,
   "publishDate": "2026-11-02"
 }
