@@ -1,0 +1,23 @@
+# API Keys & Secrets (STRICTLY FORBIDDEN TO COMMIT)
+secrets.properties
+youtube_api_key.txt
+.github_token
+*.key
+*.pem
+*.jks
+
+# Gradle & Local Config
+.gradle/
+build/
+app/build/
+local.properties
+
+# IDE & Editor files
+.idea/
+*.iml
+.kotlin/
+.DS_Store
+
+# Android Package Outputs
+*.apk
+*.aab

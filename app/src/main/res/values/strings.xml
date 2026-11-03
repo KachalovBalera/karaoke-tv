@@ -1,0 +1,54 @@
+<resources>
+    <string name="app_name">Karaoke TV</string>
+    <string name="app_tagline">Домашняя караоке-система для Android TV</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Главная</string>
+    <string name="nav_search">Поиск</string>
+    <string name="nav_russian_hits">Русские хиты</string>
+    <string name="nav_foreign_hits">Зарубежные хиты</string>
+    <string name="nav_retro_80_90">Хиты 80-х и 90-х</string>
+    <string name="nav_hits_2000">Хиты 2000-х</string>
+    <string name="nav_new_releases">Новинки</string>
+    <string name="nav_kids">Детское караоке</string>
+    <string name="nav_favorites">Избранное</string>
+    <string name="nav_history">История</string>
+    <string name="nav_queue">Очередь</string>
+    <string name="nav_party_mode">Режим вечеринки</string>
+    <string name="nav_connect_phone">Подключить телефон</string>
+    <string name="nav_settings">Настройки</string>
+    <string name="nav_soundcore">Soundcore Rave 3S</string>
+
+    <!-- Actions -->
+    <string name="action_sing">Петь</string>
+    <string name="action_select_version">Выбрать версию</string>
+    <string name="action_find_other">Найти другую минусовку</string>
+    <string name="action_add_to_queue">Добавить в очередь</string>
+    <string name="action_add_favorite">В избранное</string>
+    <string name="action_remove_favorite">Удалить из избранного</string>
+    <string name="action_skip">Пропустить</string>
+    <string name="action_repeat">Повторить</string>
+    <string name="action_clear_queue">Очистить очередь</string>
+    <string name="action_move_up">Выше</string>
+    <string name="action_move_down">Ниже</string>
+    <string name="action_remove">Удалить</string>
+    <string name="action_rate">Оценить минусовку</string>
+
+    <!-- Sources -->
+    <string name="source_all">Все источники</string>
+    <string name="source_youtube">YouTube</string>
+    <string name="source_vk">VK Видео</string>
+    <string name="source_rutube">RUTUBE</string>
+
+    <!-- Rating Reasons -->
+    <string name="rating_great_track">Отличная минусовка</string>
+    <string name="rating_readable_lyrics">Хорошо читаемый текст</string>
+    <string name="rating_good_sound">Хороший звук</string>
+    <string name="rating_lyrics_desync">Текст не совпадает с музыкой</string>
+    <string name="rating_vocal_present">Присутствует вокал</string>
+    <string name="rating_bad_sound">Плохой звук</string>
+    <string name="rating_bad_video">Плохое изображение</string>
+    <string name="rating_no_lyrics">Отсутствует текст</string>
+    <string name="rating_not_playing">Видео не воспроизводится</string>
+    <string name="rating_not_karaoke">Это не караоке</string>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_dark">#0F0F1A</color>
+    <color name="surface_dark">#181829</color>
+    <color name="surface_card">#222238</color>
+    <color name="primary_purple">#8B5CF6</color>
+    <color name="primary_purple_glow">#C084FC</color>
+    <color name="secondary_cyan">#06B6D4</color>
+    <color name="accent_pink">#EC4899</color>
+    <color name="gold_star">#FBBF24</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="error_red">#EF4444</color>
+    <color name="success_green">#10B981</color>
+</resources>
