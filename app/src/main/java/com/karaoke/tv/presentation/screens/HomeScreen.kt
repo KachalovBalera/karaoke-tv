@@ -471,65 +471,30 @@ data class MockPopularItem(
     val sourceVideoId: String = ""
 ) {
     fun toSong(): Song {
-        if (source == SourceType.GOOGLE_DRIVE) {
-            val streamingUrl = if (sourceVideoId.isNotBlank()) "https://www.googleapis.com/drive/v3/files/$sourceVideoId?alt=media" else ""
-            val gdriveVer = KaraokeVersion(
-                id = "${songId}_gdrive",
-                songId = songId,
-                source = SourceType.GOOGLE_DRIVE,
-                sourceVideoId = sourceVideoId,
-                title = "$artist — $title",
-                durationSeconds = 240,
-                quality = "MP4 / HD",
-                karaokeScore = 0.99f,
-                thumbnailUrl = coverUrl,
-                videoUrl = streamingUrl,
-                embedUrl = streamingUrl,
-                verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
-                availabilityStatus = PlaybackAvailability.AVAILABLE
-            )
-            return Song(
-                id = songId,
-                title = title,
-                artist = artist,
-                category = "Google Drive",
-                coverUrl = coverUrl,
-                versions = listOf(gdriveVer),
-                bestVersionId = gdriveVer.id
-            )
-        }
-
-        val rutubeId = if (sourceVideoId.isNotBlank() && sourceVideoId.length >= 20) {
-            sourceVideoId
-        } else {
-            CategoryCatalogue.resolveRutubeId(artist, title) ?: ""
-        }
-        val realThumbnail = coverUrl.ifBlank { CategoryCatalogue.resolveRutubeThumbnail(artist, title) }
-
-        val rutubeVersion = KaraokeVersion(
-            id = "${songId}_rutube",
+        val streamingUrl = if (sourceVideoId.isNotBlank()) "https://www.googleapis.com/drive/v3/files/$sourceVideoId?alt=media" else ""
+        val gdriveVer = KaraokeVersion(
+            id = "${songId}_gdrive",
             songId = songId,
-            source = SourceType.RUTUBE,
-            sourceVideoId = rutubeId,
-            title = "$artist — $title (RUTUBE Караоке с текстом)",
+            source = SourceType.GOOGLE_DRIVE,
+            sourceVideoId = sourceVideoId,
+            title = "$artist — $title",
             durationSeconds = 240,
-            quality = "1080p",
-            karaokeScore = 0.98f,
-            thumbnailUrl = realThumbnail,
-            embedUrl = if (rutubeId.isNotBlank()) "https://rutube.ru/play/embed/$rutubeId" else "",
-            videoUrl = if (rutubeId.isNotBlank()) "https://rutube.ru/video/$rutubeId/" else "",
+            quality = "MP4 / HD",
+            karaokeScore = 0.99f,
+            thumbnailUrl = coverUrl,
+            videoUrl = streamingUrl,
+            embedUrl = streamingUrl,
             verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
             availabilityStatus = PlaybackAvailability.AVAILABLE
         )
-
         return Song(
             id = songId,
             title = title,
             artist = artist,
-            category = "Хиты",
-            coverUrl = realThumbnail,
-            versions = listOf(rutubeVersion),
-            bestVersionId = rutubeVersion.id
+            category = "Google Drive",
+            coverUrl = coverUrl,
+            versions = listOf(gdriveVer),
+            bestVersionId = gdriveVer.id
         )
     }
 }
@@ -569,36 +534,14 @@ fun MockKaraokeCard(
                 onLongClick = onLongClick
             )
     ) {
-        // 1. Cover Image or Universal Concert Background
-        if (item.coverUrl.isNotBlank()) {
-            AsyncImage(
-                model = item.coverUrl,
-                contentDescription = "${item.artist} - ${item.title}",
+        // 1. Universal Concert Stage Card Background
+        Box(modifier = Modifier.fillMaxSize()) {
+            Image(
+                painter = painterResource(id = R.drawable.card_concert_bg),
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Image(
-                    painter = painterResource(id = R.drawable.concert_bg),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0x77070914)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = PrimaryPurpleGlow.copy(alpha = 0.35f),
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
         }
 
         // 2. High-contrast vertical gradient overlay for text readability

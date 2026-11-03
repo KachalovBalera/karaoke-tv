@@ -29,7 +29,7 @@ class SourceManager(
 
         val deferredResults = targetSources.map { source ->
             async {
-                val result = if (!source.isConfigured && source.sourceType != SourceType.RUTUBE) {
+                val result = if (!source.isConfigured) {
                     Result.failure(IllegalStateException("${source.sourceType.displayName} не настроен в Настройках"))
                 } else {
                     source.searchSongs(query, maxResultsPerSource)

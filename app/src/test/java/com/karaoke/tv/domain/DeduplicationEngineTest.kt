@@ -53,32 +53,32 @@ class DeduplicationEngineTest {
 
     @Test
     fun testFuzzyMatchingUnifiesVersionsAcrossSources() {
-        val ytVersion = KaraokeVersion(
-            id = "yt_1",
+        val driveVersion = KaraokeVersion(
+            id = "drive_1",
             songId = "",
-            source = SourceType.YOUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "v1",
             title = "Кино - Группа крови Караоке версия HQ",
             quality = "1080p"
         )
-        val rutubeVersion = KaraokeVersion(
-            id = "rt_1",
+        val localVersion = KaraokeVersion(
+            id = "drive_2",
             songId = "",
-            source = SourceType.RUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "v2",
             title = "Кино — Группа крови (Караоке с текстом на экране)",
             quality = "1080p"
         )
-        val vkVersion = KaraokeVersion(
-            id = "vk_1",
+        val localVersion2 = KaraokeVersion(
+            id = "drive_3",
             songId = "",
-            source = SourceType.VK,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "v3",
             title = "Группа крови - Кино (минусовка с бегущей строкой)",
             quality = "720p"
         )
 
-        val grouped = DeduplicationEngine.groupVersionsIntoSongs(listOf(ytVersion, rutubeVersion, vkVersion))
+        val grouped = DeduplicationEngine.groupVersionsIntoSongs(listOf(driveVersion, localVersion, localVersion2))
 
         assertEquals("Should collapse into a single unified Song card", 1, grouped.size)
         val song = grouped.first()

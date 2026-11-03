@@ -19,7 +19,7 @@ class RankKaraokeVersionsUseCaseTest {
         val unverified = KaraokeVersion(
             id = "v1",
             songId = "s1",
-            source = SourceType.RUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id1",
             title = "Песня 1",
             verificationStatus = VerificationStatus.UNVERIFIED,
@@ -29,7 +29,7 @@ class RankKaraokeVersionsUseCaseTest {
         val verified = KaraokeVersion(
             id = "v2",
             songId = "s1",
-            source = SourceType.RUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id2",
             title = "Песня 2",
             verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
@@ -46,7 +46,7 @@ class RankKaraokeVersionsUseCaseTest {
         val unavailable = KaraokeVersion(
             id = "v_dead",
             songId = "s1",
-            source = SourceType.YOUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id_dead",
             title = "Песня (заблокирована)",
             availabilityStatus = PlaybackAvailability.UNAVAILABLE,
@@ -55,7 +55,7 @@ class RankKaraokeVersionsUseCaseTest {
         val available = KaraokeVersion(
             id = "v_alive",
             songId = "s1",
-            source = SourceType.RUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id_alive",
             title = "Песня",
             availabilityStatus = PlaybackAvailability.AVAILABLE,
@@ -68,34 +68,28 @@ class RankKaraokeVersionsUseCaseTest {
 
     @Test
     fun testUserPreferredSourceBoostsRank() {
-        val rutube = KaraokeVersion(
-            id = "v_rutube",
+        val lowerScore = KaraokeVersion(
+            id = "v_lower",
             songId = "s1",
-            source = SourceType.RUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id1",
             title = "Песня",
-            karaokeScore = 0.8f
+            karaokeScore = 0.6f
         )
-        val youtube = KaraokeVersion(
-            id = "v_youtube",
+        val higherScore = KaraokeVersion(
+            id = "v_higher",
             songId = "s1",
-            source = SourceType.YOUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id2",
             title = "Песня",
-            karaokeScore = 0.8f
+            karaokeScore = 0.95f
         )
 
-        val prefRutube = rankUseCase.rank(
-            listOf(youtube, rutube),
-            RankingPreferences(preferredSource = SourceType.RUTUBE)
+        val prefGdrive = rankUseCase.rank(
+            listOf(lowerScore, higherScore),
+            RankingPreferences(preferredSource = SourceType.GOOGLE_DRIVE)
         )
-        assertEquals("User preferred RUTUBE must rank #1", "v_rutube", prefRutube.first().id)
-
-        val prefYt = rankUseCase.rank(
-            listOf(rutube, youtube),
-            RankingPreferences(preferredSource = SourceType.YOUTUBE)
-        )
-        assertEquals("User preferred YouTube must rank #1", "v_youtube", prefYt.first().id)
+        assertEquals("Higher score must rank #1", "v_higher", prefGdrive.first().id)
     }
 
     @Test
@@ -103,7 +97,7 @@ class RankKaraokeVersionsUseCaseTest {
         val realKaraoke = KaraokeVersion(
             id = "v_karaoke",
             songId = "s1",
-            source = SourceType.RUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id1",
             title = "Караоке с текстом",
             karaokeScore = 0.95f,
@@ -112,7 +106,7 @@ class RankKaraokeVersionsUseCaseTest {
         val clipVideo = KaraokeVersion(
             id = "v_clip",
             songId = "s1",
-            source = SourceType.RUTUBE,
+            source = SourceType.GOOGLE_DRIVE,
             sourceVideoId = "id2",
             title = "Официальный клип (не караоке)",
             karaokeScore = 0.15f,

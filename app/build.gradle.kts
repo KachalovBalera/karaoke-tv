@@ -24,30 +24,6 @@ android {
             useSupportLibrary = true
         }
 
-        // Resolving YouTube API key from local config files (secrets.properties, youtube_api_key.txt, or local.properties)
-        val resolvedKey = run {
-            val secretsFile = rootProject.file("secrets.properties")
-            if (secretsFile.exists()) {
-                val props = Properties()
-                secretsFile.inputStream().use { props.load(it) }
-                val key = props.getProperty("YOUTUBE_API_KEY", "").trim()
-                if (key.isNotBlank()) return@run key
-            }
-            val txtFile = rootProject.file("youtube_api_key.txt")
-            if (txtFile.exists()) {
-                val line = txtFile.readLines().firstOrNull { it.trim().isNotEmpty() && !it.trim().startsWith("#") }?.trim() ?: ""
-                if (line.isNotBlank()) return@run line
-            }
-            val localFile = rootProject.file("local.properties")
-            if (localFile.exists()) {
-                val props = Properties()
-                localFile.inputStream().use { props.load(it) }
-                val key = props.getProperty("YOUTUBE_API_KEY", "").trim()
-                if (key.isNotBlank()) return@run key
-            }
-            System.getenv("YOUTUBE_API_KEY")?.trim() ?: ""
-        }
-        buildConfigField("String", "YOUTUBE_API_KEY", "\"$resolvedKey\"")
     }
 
     buildTypes {
@@ -137,7 +113,6 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.exoplayer.dash)
     implementation(libs.media3.ui)
-    implementation(libs.youtube.player)
 
     // Image loading
     implementation(libs.coil.compose)

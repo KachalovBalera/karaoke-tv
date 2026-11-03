@@ -36,9 +36,8 @@
 
     <!-- Sources -->
     <string name="source_all">Все источники</string>
-    <string name="source_youtube">YouTube</string>
-    <string name="source_vk">VK Видео</string>
-    <string name="source_rutube">RUTUBE</string>
+    <string name="source_local_server">Локальный медиасервер</string>
+    <string name="source_google_drive">Google Drive</string>
 
     <!-- Rating Reasons -->
     <string name="rating_great_track">Отличная минусовка</string>

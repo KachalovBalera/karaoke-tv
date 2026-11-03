@@ -137,6 +137,6 @@ data class PlaybackFailureEntity(
 @Entity(tableName = "source_preferences")
 data class SourcePreferenceEntity(
     @PrimaryKey val id: Int = 1,
-    val preferredSource: SourceType = SourceType.YOUTUBE,
+    val preferredSource: SourceType = SourceType.GOOGLE_DRIVE,
     val autoFallback: Boolean = true
 )

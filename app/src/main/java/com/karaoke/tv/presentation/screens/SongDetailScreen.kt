@@ -67,12 +67,11 @@ fun SongDetailScreen(
     isFavorite: Boolean,
     onBack: () -> Unit
 ) {
-    val rutubeVersions = remember(song) {
-        val filtered = song.versions.filter { it.source == SourceType.RUTUBE }
-        if (filtered.isNotEmpty()) filtered else listOfNotNull(song.bestVersion ?: song.versions.firstOrNull())
+    val availableVersions = remember(song) {
+        if (song.versions.isNotEmpty()) song.versions else listOfNotNull(song.bestVersion)
     }
     var selectedVersion by remember(song) {
-        mutableStateOf(rutubeVersions.firstOrNull())
+        mutableStateOf(availableVersions.firstOrNull())
     }
     var participantName by remember { mutableStateOf("Гость") }
 
@@ -108,6 +107,13 @@ fun SongDetailScreen(
                 if (song.coverUrl.isNotBlank()) {
                     AsyncImage(
                         model = song.coverUrl,
+                        contentDescription = song.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize()
+                    )
+                } else {
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.karaoke.tv.R.drawable.card_concert_bg),
                         contentDescription = song.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.matchParentSize()
@@ -189,7 +195,7 @@ fun SongDetailScreen(
 
         Spacer(modifier = Modifier.width(44.dp))
 
-        // Right Column: RUTUBE Karaoke Track Details
+        // Right Column: Karaoke Track Details
         Column(modifier = Modifier.weight(1f)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -197,14 +203,14 @@ fun SongDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "КАРАОКЕ RUTUBE С ТЕКСТОМ",
+                    text = "ВЕРСИИ КАРАОКЕ (MP4)",
                     color = PrimaryPurple,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "Full HD • Караоке-минусовка",
+                    text = "HD 720p / 1080p • С текстом",
                     color = TextMuted,
                     fontSize = 15.sp
                 )
@@ -216,7 +222,7 @@ fun SongDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(rutubeVersions) { version ->
+                items(availableVersions) { version ->
                     val isCurrent = version.id == selectedVersion?.id
                     TvVersionItem(
                         version = version,

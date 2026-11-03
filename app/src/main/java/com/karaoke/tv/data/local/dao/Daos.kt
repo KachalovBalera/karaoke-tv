@@ -84,6 +84,15 @@ interface KaraokeVersionDao {
     @Query("SELECT * FROM karaoke_versions")
     suspend fun getAllVersions(): List<KaraokeVersionEntity>
 
+    @Query("SELECT * FROM karaoke_versions WHERE source = :source")
+    suspend fun getVersionsBySource(source: com.karaoke.tv.domain.model.SourceType): List<KaraokeVersionEntity>
+
+    @Query("SELECT COUNT(*) FROM karaoke_versions WHERE source = :source")
+    suspend fun getCountBySource(source: com.karaoke.tv.domain.model.SourceType): Int
+
+    @Query("SELECT COUNT(DISTINCT songId) FROM karaoke_versions WHERE source = 'GOOGLE_DRIVE'")
+    suspend fun getDriveSongsCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertVersions(versions: List<KaraokeVersionEntity>)
 

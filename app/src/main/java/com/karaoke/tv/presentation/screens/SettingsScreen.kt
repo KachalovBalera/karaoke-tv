@@ -2,10 +2,6 @@ package com.karaoke.tv.presentation.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,35 +16,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Api
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.SystemUpdateAlt
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.karaoke.tv.domain.model.SourceType
 import com.karaoke.tv.presentation.components.TvButton
 import com.karaoke.tv.presentation.theme.AccentPink
 import com.karaoke.tv.presentation.theme.BackgroundDark
@@ -59,7 +46,6 @@ import com.karaoke.tv.presentation.theme.PrimaryPurpleGlow
 import com.karaoke.tv.presentation.theme.SecondaryCyan
 import com.karaoke.tv.presentation.theme.SuccessGreen
 import com.karaoke.tv.presentation.theme.SurfaceCard
-import com.karaoke.tv.presentation.theme.SurfaceCardFocused
 import com.karaoke.tv.presentation.theme.TextMuted
 import com.karaoke.tv.presentation.theme.TextPrimary
 import com.karaoke.tv.presentation.theme.TextSecondary
@@ -68,12 +54,15 @@ import com.karaoke.tv.update.UpdateStatus
 
 @Composable
 fun SettingsScreen(
-    youtubeApiKey: String,
-    onYoutubeApiKeyChange: (String) -> Unit,
-    vkAccessToken: String,
-    onVkAccessTokenChange: (String) -> Unit,
-    sourcePriority: SourceType?,
-    onSourcePriorityChange: (SourceType?) -> Unit,
+    // Google Drive Props
+    isGoogleDriveConnected: Boolean = false,
+    googleDriveAccountEmail: String = "",
+    totalDriveSongsCount: Int = 0,
+    isSyncingGoogleDrive: Boolean = false,
+    syncProgressText: String = "",
+    onSyncGoogleDrive: () -> Unit = {},
+    onDeleteGoogleDriveKey: () -> Unit = {},
+    // Optimization & Maintenance Props
     enableAnimations: Boolean,
     onToggleAnimations: () -> Unit,
     onClearSearchHistory: () -> Unit,
@@ -85,15 +74,7 @@ fun SettingsScreen(
     customManifestUrl: String,
     onCustomManifestUrlChange: (String) -> Unit,
     onCheckForUpdates: () -> Unit,
-    onOpenUpdateDialog: () -> Unit,
-    // Google Drive Props
-    isGoogleDriveConnected: Boolean = false,
-    googleDriveAccountEmail: String = "",
-    totalDriveSongsCount: Int = 0,
-    isSyncingGoogleDrive: Boolean = false,
-    syncProgressText: String = "",
-    onSyncGoogleDrive: () -> Unit = {},
-    onDeleteGoogleDriveKey: () -> Unit = {}
+    onOpenUpdateDialog: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -117,66 +98,59 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Karaoke TV v1.2.4 — Google Drive Edition: персональная коллекция караоке",
+                text = "Karaoke TV v$currentAppVersion — Единственный источник: Google Drive",
                 color = TextSecondary,
                 fontSize = 17.sp
             )
         }
 
-        // Section: Active Video Source (Google Drive Exclusive)
+        // Section 1: Google Drive (Единственный активный источник)
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(SurfaceCard)
+                    .border(1.5.dp, PrimaryPurpleGlow, RoundedCornerShape(16.dp))
                     .padding(24.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CloudDownload,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(28.dp)
-                            )
+                            Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(26.dp))
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = "ЕДИНЫЙ ИСТОЧНИК КАРАОКЕ — GOOGLE ДИСК",
+                                text = "ОБЛАЧНЫЙ ИСТОЧНИК (GOOGLE DRIVE)",
                                 color = TextPrimary,
-                                fontSize = 20.sp,
+                                fontSize = 19.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
-                        if (isSyncingGoogleDrive) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(
-                                    color = NeonCyan,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Синхронизация...",
-                                    color = NeonCyan,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF1EA362))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "АКТИВНЫЙ ИСТОЧНИК",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
 
                     Text(
-                        text = "Воспроизведение личной коллекции караоке в формате MP4 напрямую с Google Диска через аппаратный декодер Media3 ExoPlayer с поддержкой HTTP Range 206 (быстрая перемотка без буферизации).",
+                        text = "Воспроизведение личной коллекции MP4 песен напрямую с Google Диска через Google Drive API и защищенный Service Account.",
                         color = TextSecondary,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp
                     )
 
                     // Connection status badge
@@ -205,7 +179,7 @@ fun SettingsScreen(
                                     text = if (isGoogleDriveConnected) {
                                         "Google Service Account: $googleDriveAccountEmail"
                                     } else {
-                                        "Ключ Google Drive не найден в Keystore. Загрузите ключ через ADB."
+                                        "Ключ Google Drive не найден в Keystore."
                                     },
                                     color = Color.White,
                                     fontSize = 16.sp,
@@ -213,7 +187,7 @@ fun SettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "В каталоге песен: $totalDriveSongsCount" +
+                                    text = "В каталоге Google Drive: $totalDriveSongsCount песен" +
                                             if (syncProgressText.isNotBlank()) " • $syncProgressText" else "",
                                     color = if (isGoogleDriveConnected) NeonCyan else TextMuted,
                                     fontSize = 14.sp
@@ -222,7 +196,7 @@ fun SettingsScreen(
                         }
                     }
 
-                    // Action buttons: Sync and Key management
+                    // Action buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -232,12 +206,7 @@ fun SettingsScreen(
                             onClick = onSyncGoogleDrive,
                             isPrimary = true,
                             leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
-                                )
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                             }
                         )
 
@@ -247,12 +216,7 @@ fun SettingsScreen(
                                 onClick = onDeleteGoogleDriveKey,
                                 isPrimary = false,
                                 leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.DeleteSweep,
-                                        contentDescription = null,
-                                        tint = AccentPink,
-                                        modifier = Modifier.size(22.dp)
-                                    )
+                                    Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = AccentPink, modifier = Modifier.size(20.dp))
                                 }
                             )
                         }
@@ -261,7 +225,7 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Performance & Optimization
+        // Section 2: Performance & Optimization
         item {
             Box(
                 modifier = Modifier
@@ -294,7 +258,7 @@ fun SettingsScreen(
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "Отключите на недорогих ТВ-приставках с объемом ОЗУ 1-2 ГБ для максимального быстродействия",
+                                text = "Рекомендуется оставить включенным для Allwinner H618",
                                 color = TextMuted,
                                 fontSize = 12.sp
                             )
@@ -310,7 +274,7 @@ fun SettingsScreen(
             }
         }
 
-        // Section: OTA Updates (GitHub Releases)
+        // Section 3: OTA Updates
         item {
             Box(
                 modifier = Modifier
@@ -319,19 +283,14 @@ fun SettingsScreen(
                     .background(SurfaceCard)
                     .padding(18.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.SystemUpdateAlt,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            Icon(imageVector = Icons.Default.Download, contentDescription = null, tint = SecondaryCyan, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Обновление по воздуху (OTA)",
@@ -341,20 +300,12 @@ fun SettingsScreen(
                             )
                         }
 
-                        // Current version tag
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF1E143E))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "Версия v$currentAppVersion",
-                                color = PrimaryPurpleGlow,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = "Версия v$currentAppVersion",
+                            color = PrimaryPurpleGlow,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
 
                     Text(
@@ -363,149 +314,33 @@ fun SettingsScreen(
                         fontSize = 13.sp
                     )
 
-                    // Current update status display
-                    when (updateStatus) {
-                        is UpdateStatus.Checking -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = NeonCyan,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Связываемся с GitHub для проверки новой версии...",
-                                    color = NeonCyan,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-
-                        is UpdateStatus.UpToDate -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = SuccessGreen,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = updateStatus.message,
-                                    color = SuccessGreen,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-
-                        is UpdateStatus.UpdateAvailable -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.CloudDownload,
-                                        contentDescription = null,
-                                        tint = GoldStar,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Найдено обновление: v${updateStatus.info.version}!",
-                                        color = GoldStar,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        is UpdateStatus.ReadyToInstall -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = SuccessGreen,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Пакет v${updateStatus.info.version} загружен и готов к установке.",
-                                    color = SuccessGreen,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        is UpdateStatus.Downloading -> {
-                            val percent = (updateStatus.progress * 100).toInt()
-                            Text(
-                                text = "Идёт скачивание APK: $percent%",
-                                color = NeonCyan,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-
-                        is UpdateStatus.Error -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.ErrorOutline,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEF4444),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = updateStatus.message,
-                                    color = Color(0xFFEF4444),
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-
-                        else -> Unit
-                    }
-
-                    // Action buttons
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         TvButton(
-                            text = if (updateStatus is UpdateStatus.Checking) "Проверяем..." else "Проверить обновление",
+                            text = when (updateStatus) {
+                                is UpdateStatus.Checking -> "Проверка..."
+                                else -> "Проверить обновление"
+                            },
                             onClick = onCheckForUpdates,
-                            isPrimary = updateStatus !is UpdateStatus.UpdateAvailable && updateStatus !is UpdateStatus.ReadyToInstall
+                            isPrimary = false
                         )
 
-                        if (updateInfo != null || updateStatus is UpdateStatus.UpdateAvailable || updateStatus is UpdateStatus.ReadyToInstall) {
+                        if (updateInfo != null) {
                             TvButton(
-                                text = "Открыть окно обновления",
+                                text = "Доступна v${updateInfo.version}!",
                                 onClick = onOpenUpdateDialog,
                                 isPrimary = true
                             )
                         }
                     }
-
-                    // Optional Custom Manifest URL
-                    Column {
-                        Text(
-                            text = "URL манифеста обновлений (по умолчанию GitHub Releases):",
-                            color = TextMuted,
-                            fontSize = 12.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        SettingsInputField(
-                            value = customManifestUrl,
-                            onValueChange = onCustomManifestUrlChange,
-                            placeholder = "https://raw.githubusercontent.com/KachalovBalera/karaoke-tv/main/version.json"
-                        )
-                    }
                 }
             }
         }
 
-        // Section: Maintenance
+        // Section 4: Maintenance & Reset
         item {
             Box(
                 modifier = Modifier
@@ -516,7 +351,7 @@ fun SettingsScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(20.dp))
+                        Icon(imageVector = Icons.Default.Storage, contentDescription = null, tint = AccentPink, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Обслуживание и хранилище Room",
@@ -526,14 +361,15 @@ fun SettingsScreen(
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         TvButton(
                             text = "Очистить историю поиска",
                             onClick = onClearSearchHistory,
                             isPrimary = false
                         )
+
                         TvButton(
-                            text = "Сбросить к заводским песням",
+                            text = "Сбросить базу песен",
                             onClick = onResetDatabase,
                             isPrimary = false
                         )
@@ -541,50 +377,5 @@ fun SettingsScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SettingsInputField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (isFocused) SurfaceCardFocused else Color(0xFF141424))
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) PrimaryPurpleGlow else Color(0xFF33334D),
-                shape = RoundedCornerShape(10.dp)
-            )
-            .padding(horizontal = 14.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            textStyle = TextStyle(
-                color = TextPrimary,
-                fontSize = 14.sp
-            ),
-            cursorBrush = SolidColor(PrimaryPurple),
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusable(interactionSource = interactionSource),
-            decorationBox = { inner ->
-                if (value.isEmpty()) {
-                    Text(text = placeholder, color = TextMuted, fontSize = 13.sp)
-                }
-                inner()
-            }
-        )
     }
 }

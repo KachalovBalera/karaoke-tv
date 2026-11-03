@@ -2,7 +2,9 @@ package com.karaoke.tv.presentation
 
 import android.content.Intent
 import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -89,6 +92,7 @@ import com.karaoke.tv.presentation.theme.PrimaryPurpleGlow
 import com.karaoke.tv.presentation.theme.SecondaryCyan
 import com.karaoke.tv.presentation.theme.SidebarBackground
 import com.karaoke.tv.presentation.theme.SidebarBorder
+import com.karaoke.tv.presentation.theme.SurfaceCard
 import com.karaoke.tv.presentation.theme.TextMuted
 import com.karaoke.tv.presentation.theme.TextPrimary
 import com.karaoke.tv.presentation.theme.TextSecondary
@@ -96,6 +100,10 @@ import com.karaoke.tv.presentation.theme.TextSecondary
 class MainActivity : ComponentActivity() {
 
     private val viewModel: KaraokeViewModel by viewModels()
+
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListeningVoice by mutableStateOf(false)
+    private var voicePromptText by mutableStateOf("Слушаю... Назовите песню или исполнителя")
 
     private val voiceLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -112,7 +120,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            startVoiceSearchIntent()
+            startInAppVoiceSearch()
         }
     }
 
@@ -260,12 +268,13 @@ class MainActivity : ComponentActivity() {
 
                                 // 6: Настройки
                                 6 -> SettingsScreen(
-                                    youtubeApiKey = uiState.youtubeApiKey,
-                                    onYoutubeApiKeyChange = { viewModel.updateYoutubeApiKey(it) },
-                                    vkAccessToken = uiState.vkAccessToken,
-                                    onVkAccessTokenChange = { viewModel.updateVkAccessToken(it) },
-                                    sourcePriority = uiState.sourcePriority,
-                                    onSourcePriorityChange = { viewModel.setSourcePriority(it) },
+                                    isGoogleDriveConnected = uiState.isGoogleDriveConnected,
+                                    googleDriveAccountEmail = uiState.googleDriveAccountEmail,
+                                    totalDriveSongsCount = uiState.totalDriveSongsCount,
+                                    isSyncingGoogleDrive = uiState.isSyncingGoogleDrive,
+                                    syncProgressText = uiState.syncProgressText,
+                                    onSyncGoogleDrive = { viewModel.syncGoogleDrive() },
+                                    onDeleteGoogleDriveKey = { viewModel.deleteGoogleDriveCredentials() },
                                     enableAnimations = uiState.enableAnimations,
                                     onToggleAnimations = { viewModel.toggleAnimations() },
                                     onClearSearchHistory = { viewModel.clearSearchHistory() },
@@ -276,14 +285,7 @@ class MainActivity : ComponentActivity() {
                                     customManifestUrl = uiState.customManifestUrl,
                                     onCustomManifestUrlChange = { viewModel.updateCustomManifestUrl(it) },
                                     onCheckForUpdates = { viewModel.checkForUpdates(isAutoCheck = false) },
-                                    onOpenUpdateDialog = { viewModel.openUpdateDialogManually() },
-                                    isGoogleDriveConnected = uiState.isGoogleDriveConnected,
-                                    googleDriveAccountEmail = uiState.googleDriveAccountEmail,
-                                    totalDriveSongsCount = uiState.totalDriveSongsCount,
-                                    isSyncingGoogleDrive = uiState.isSyncingGoogleDrive,
-                                    syncProgressText = uiState.syncProgressText,
-                                    onSyncGoogleDrive = { viewModel.syncGoogleDrive() },
-                                    onDeleteGoogleDriveKey = { viewModel.deleteGoogleDriveCredentials() }
+                                    onOpenUpdateDialog = { viewModel.openUpdateDialogManually() }
                                 )
 
                                 // 7: Soundcore Rave 3S Setup & Calibration Screen
@@ -366,6 +368,57 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { viewModel.dismissUpdateDialog() }
                         )
                     }
+
+                    // In-app Speech Recognition Dialog Overlay
+                    if (isListeningVoice) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xCC000000))
+                                .clickable {
+                                    speechRecognizer?.stopListening()
+                                    isListeningVoice = false
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .width(460.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(SurfaceCard)
+                                    .border(2.dp, PrimaryPurpleGlow, RoundedCornerShape(20.dp))
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = SecondaryCyan,
+                                    strokeWidth = 4.dp,
+                                    modifier = Modifier.size(56.dp)
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Text(
+                                    text = "Голосовой поиск",
+                                    color = Color.White,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = voicePromptText,
+                                    color = SecondaryCyan,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Назовите песню или исполнителя в микрофон пульта",
+                                    color = TextMuted,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -385,6 +438,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
         Log.d("KaraokeDiagnostic", "LIFECYCLE | onDestroy | Activity destroying")
         if (isFinishing) {
             viewModel.closePlayer(removeFromQueue = false, goToSearchIfEmptyQueue = false)
@@ -397,9 +452,64 @@ class MainActivity : ComponentActivity() {
                 android.Manifest.permission.RECORD_AUDIO
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
-            startVoiceSearchIntent()
+            startInAppVoiceSearch()
         } else {
             audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun startInAppVoiceSearch() {
+        val isAvail = SpeechRecognizer.isRecognitionAvailable(this)
+        if (!isAvail) {
+            Log.w("MainActivity", "In-app SpeechRecognizer not available, falling back to intent")
+            startVoiceSearchIntent()
+            return
+        }
+
+        try {
+            speechRecognizer?.destroy()
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        isListeningVoice = true
+                        voicePromptText = "Слушаю... Говорите"
+                    }
+                    override fun onBeginningOfSpeech() {
+                        voicePromptText = "Распознавание речи..."
+                    }
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {
+                        voicePromptText = "Поиск песни..."
+                    }
+                    override fun onError(error: Int) {
+                        isListeningVoice = false
+                        Log.w("VoiceSearch", "SpeechRecognizer error: $error, trying intent fallback")
+                        startVoiceSearchIntent()
+                    }
+                    override fun onResults(results: Bundle?) {
+                        isListeningVoice = false
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        val spoken = matches?.firstOrNull()
+                        if (!spoken.isNullOrBlank()) {
+                            viewModel.triggerVoiceSearch(spoken)
+                        }
+                    }
+                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+            }
+
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ru-RU", "en-US"))
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            }
+            speechRecognizer?.startListening(intent)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "SpeechRecognizer failed: ${e.message}", e)
+            startVoiceSearchIntent()
         }
     }
 

@@ -97,36 +97,14 @@ fun TvSongCard(
                 onLongClick = onLongClick
             )
     ) {
-        // 1. Cover Image or Universal Concert Background
-        if (song.coverUrl.isNotBlank()) {
-            AsyncImage(
-                model = song.coverUrl,
-                contentDescription = "${song.artist} - ${song.title}",
+        // 1. Universal Concert Stage Card Background
+        Box(modifier = Modifier.fillMaxSize()) {
+            Image(
+                painter = painterResource(id = R.drawable.card_concert_bg),
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Image(
-                    painter = painterResource(id = R.drawable.concert_bg),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0x77070914)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = PrimaryPurpleGlow.copy(alpha = 0.35f),
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
         }
 
         // 2. High-contrast vertical gradient overlay for text readability
@@ -333,10 +311,6 @@ fun SourceBadge(
 ) {
     val (bgColor, textColor) = when (source) {
         SourceType.GOOGLE_DRIVE -> Color(0xFF1EA362) to Color.White
-        SourceType.YOUTUBE -> Color(0xFFCC0000) to Color.White
-        SourceType.VK -> Color(0xFF0077FF) to Color.White
-        SourceType.RUTUBE -> Color(0xFF00A82D) to Color.White
-        SourceType.LOCAL -> PrimaryPurple to Color.White
     }
 
     Box(

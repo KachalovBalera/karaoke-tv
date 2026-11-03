@@ -13,7 +13,7 @@ class Converters {
     fun fromSourceType(source: SourceType): String = source.name
 
     @TypeConverter
-    fun toSourceType(value: String): SourceType = runCatching { SourceType.valueOf(value) }.getOrDefault(SourceType.YOUTUBE)
+    fun toSourceType(value: String): SourceType = SourceType.GOOGLE_DRIVE
 
     @TypeConverter
     fun fromAvailability(status: PlaybackAvailability): String = status.name

@@ -85,6 +85,16 @@ abstract class KaraokeDatabase : RoomDatabase() {
                                 populateInitialData(getInstance(context))
                             }
                         }
+
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    db.execSQL("DELETE FROM karaoke_versions WHERE source != 'GOOGLE_DRIVE'")
+                                    db.execSQL("DELETE FROM songs WHERE id NOT IN (SELECT DISTINCT songId FROM karaoke_versions WHERE source = 'GOOGLE_DRIVE')")
+                                } catch (_: Exception) {}
+                            }
+                        }
                     })
                     .build()
                 INSTANCE = instance
@@ -93,201 +103,7 @@ abstract class KaraokeDatabase : RoomDatabase() {
         }
 
         private suspend fun populateInitialData(db: KaraokeDatabase) {
-            val defaultSongs = listOf(
-                // Русские хиты
-                PredefinedSong(
-                    id = "kino_gruppa_krovi",
-                    title = "Группа крови",
-                    artist = "Кино",
-                    category = "Русские хиты",
-                    coverUrl = "https://pic.rtbcdn.ru/video/2026-06-13/84/9e/849e66a5070125f46504c35d1e1dff34.jpg",
-                    versions = listOf(
-                        KaraokeVersionEntity(
-                            id = "kino_gk_rutube_1",
-                            songId = "kino_gruppa_krovi",
-                            source = SourceType.RUTUBE,
-                            sourceVideoId = "a5b154cdee7b562d361f28818d90d49e",
-                            title = "Кино — Группа крови (Караоке с текстом)",
-                            channelOrAuthor = "Караоке Топ 100",
-                            thumbnailUrl = "https://pic.rtbcdn.ru/video/2026-06-13/84/9e/849e66a5070125f46504c35d1e1dff34.jpg",
-                            durationSeconds = 263,
-                            videoUrl = "https://rutube.ru/video/a5b154cdee7b562d361f28818d90d49e/",
-                            embedUrl = "https://rutube.ru/play/embed/a5b154cdee7b562d361f28818d90d49e",
-                            quality = "1080p",
-                            karaokeScore = 0.95f,
-                            userRatingAverage = 4.8f,
-                            ratingCount = 12,
-                            isEmbeddable = true,
-                            verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
-                            availabilityStatus = PlaybackAvailability.AVAILABLE,
-                            lastCheckedTs = System.currentTimeMillis()
-                        ),
-                        KaraokeVersionEntity(
-                            id = "kino_gk_yt_1",
-                            songId = "kino_gruppa_krovi",
-                            source = SourceType.YOUTUBE,
-                            sourceVideoId = "dQw4w9WgXcQ", // fallback placeholder for YouTube
-                            title = "Кино - Группа крови Караоке версия HQ",
-                            channelOrAuthor = "X-Star Karaoke",
-                            thumbnailUrl = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-                            durationSeconds = 270,
-                            videoUrl = "https://youtube.com/watch?v=dQw4w9WgXcQ",
-                            embedUrl = "https://www.youtube.com/embed/dQw4w9WgXcQ",
-                            quality = "1080p",
-                            karaokeScore = 0.92f,
-                            userRatingAverage = 4.5f,
-                            ratingCount = 5,
-                            isEmbeddable = true,
-                            verificationStatus = VerificationStatus.PROBABLE_KARAOKE,
-                            availabilityStatus = PlaybackAvailability.AVAILABLE,
-                            lastCheckedTs = System.currentTimeMillis()
-                        )
-                    )
-                ),
-                // Хиты 80-90х
-                PredefinedSong(
-                    id = "ruki_vverh_kroshka_moya",
-                    title = "Крошка моя",
-                    artist = "Руки Вверх",
-                    category = "Хиты 80-х и 90-х",
-                    coverUrl = "https://pic.rtbcdn.ru/video/2025-11-14/ee/d4/eed4464cd0bc50dbfb1ca8b1341e5d85.jpg",
-                    versions = listOf(
-                        KaraokeVersionEntity(
-                            id = "rv_km_rutube_1",
-                            songId = "ruki_vverh_kroshka_moya",
-                            source = SourceType.RUTUBE,
-                            sourceVideoId = "87fde5dade05e2391c74d622ebdaabac",
-                            title = "Руки Вверх — Крошка моя (Караоке с бегущей строкой)",
-                            channelOrAuthor = "Караоке Топ 100",
-                            thumbnailUrl = "https://pic.rtbcdn.ru/video/2025-11-14/ee/d4/eed4464cd0bc50dbfb1ca8b1341e5d85.jpg",
-                            durationSeconds = 245,
-                            videoUrl = "https://rutube.ru/video/87fde5dade05e2391c74d622ebdaabac/",
-                            embedUrl = "https://rutube.ru/play/embed/87fde5dade05e2391c74d622ebdaabac",
-                            quality = "1080p",
-                            karaokeScore = 0.96f,
-                            userRatingAverage = 4.9f,
-                            ratingCount = 20,
-                            isEmbeddable = true,
-                            verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
-                            availabilityStatus = PlaybackAvailability.AVAILABLE,
-                            lastCheckedTs = System.currentTimeMillis()
-                        )
-                    )
-                ),
-                // Любэ - Конь
-                PredefinedSong(
-                    id = "lyube_kon",
-                    title = "Конь (Выйду ночью в поле)",
-                    artist = "Любэ",
-                    category = "Русские хиты",
-                    coverUrl = "https://pic.rtbcdn.ru/video/2025-05-21/09/b5/09b59af07dff310d6ea2db3b66774504.jpg",
-                    versions = listOf(
-                        KaraokeVersionEntity(
-                            id = "lyube_kon_rutube_1",
-                            songId = "lyube_kon",
-                            source = SourceType.RUTUBE,
-                            sourceVideoId = "01de63121a6c9b9a9bb41fab85130a50",
-                            title = "Любэ — Конь (Караоке минусовка с текстом)",
-                            channelOrAuthor = "Любимое Караоке",
-                            thumbnailUrl = "https://pic.rtbcdn.ru/video/2025-05-21/09/b5/09b59af07dff310d6ea2db3b66774504.jpg",
-                            durationSeconds = 215,
-                            videoUrl = "https://rutube.ru/video/01de63121a6c9b9a9bb41fab85130a50/",
-                            embedUrl = "https://rutube.ru/play/embed/01de63121a6c9b9a9bb41fab85130a50",
-                            quality = "1080p",
-                            karaokeScore = 0.98f,
-                            userRatingAverage = 5.0f,
-                            ratingCount = 35,
-                            isEmbeddable = true,
-                            verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
-                            availabilityStatus = PlaybackAvailability.AVAILABLE,
-                            lastCheckedTs = System.currentTimeMillis()
-                        )
-                    )
-                ),
-                // Король и Шут - Лесник
-                PredefinedSong(
-                    id = "kish_lesnik",
-                    title = "Лесник",
-                    artist = "Король и Шут",
-                    category = "Русские хиты",
-                    coverUrl = "https://pic.rtbcdn.ru/video/2026-06-13/84/9e/849e66a5070125f46504c35d1e1dff34.jpg",
-                    versions = listOf(
-                        KaraokeVersionEntity(
-                            id = "kish_lesnik_v1",
-                            songId = "kish_lesnik",
-                            source = SourceType.RUTUBE,
-                            sourceVideoId = "a5b154cdee7b562d361f28818d90d49e",
-                            title = "Король и Шут — Лесник (Караоке с текстом)",
-                            channelOrAuthor = "Рок Караоке",
-                            thumbnailUrl = "https://pic.rtbcdn.ru/video/2026-06-13/84/9e/849e66a5070125f46504c35d1e1dff34.jpg",
-                            durationSeconds = 195,
-                            videoUrl = "https://rutube.ru/video/a5b154cdee7b562d361f28818d90d49e/",
-                            embedUrl = "https://rutube.ru/play/embed/a5b154cdee7b562d361f28818d90d49e",
-                            quality = "1080p",
-                            karaokeScore = 0.97f,
-                            userRatingAverage = 4.95f,
-                            ratingCount = 42,
-                            isEmbeddable = true,
-                            verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
-                            availabilityStatus = PlaybackAvailability.AVAILABLE,
-                            lastCheckedTs = System.currentTimeMillis()
-                        )
-                    )
-                ),
-                // Детское караоке
-                PredefinedSong(
-                    id = "kids_ot_ulybki",
-                    title = "От улыбки станет всем светлей",
-                    artist = "Крошка Енот",
-                    category = "Детское караоке",
-                    coverUrl = "https://pic.rtbcdn.ru/video/2025-11-14/ee/d4/eed4464cd0bc50dbfb1ca8b1341e5d85.jpg",
-                    versions = listOf(
-                        KaraokeVersionEntity(
-                            id = "kids_ou_v1",
-                            songId = "kids_ot_ulybki",
-                            source = SourceType.RUTUBE,
-                            sourceVideoId = "87fde5dade05e2391c74d622ebdaabac",
-                            title = "От улыбки хмурый день светлей — Караоке для детей",
-                            channelOrAuthor = "Детское ТВ",
-                            thumbnailUrl = "https://pic.rtbcdn.ru/video/2025-11-14/ee/d4/eed4464cd0bc50dbfb1ca8b1341e5d85.jpg",
-                            durationSeconds = 140,
-                            videoUrl = "https://rutube.ru/video/87fde5dade05e2391c74d622ebdaabac/",
-                            embedUrl = "https://rutube.ru/play/embed/87fde5dade05e2391c74d622ebdaabac",
-                            quality = "1080p",
-                            karaokeScore = 0.99f,
-                            userRatingAverage = 4.9f,
-                            ratingCount = 18,
-                            isEmbeddable = true,
-                            verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
-                            availabilityStatus = PlaybackAvailability.AVAILABLE,
-                            lastCheckedTs = System.currentTimeMillis()
-                        )
-                    )
-                )
-            )
-
-            for (song in defaultSongs) {
-                db.songDao().insertSong(
-                    SongEntity(
-                        id = song.id,
-                        title = song.title,
-                        artist = song.artist,
-                        coverUrl = song.coverUrl,
-                        category = song.category,
-                        bestVersionId = song.versions.firstOrNull()?.id
-                    )
-                )
-                db.karaokeVersionDao().insertVersions(song.versions)
-            }
+            // Catalog is dynamically synced from Google Drive or Local Media Server
         }
     }
 }
-
-private data class PredefinedSong(
-    val id: String,
-    val title: String,
-    val artist: String,
-    val category: String,
-    val coverUrl: String,
-    val versions: List<KaraokeVersionEntity>
-)

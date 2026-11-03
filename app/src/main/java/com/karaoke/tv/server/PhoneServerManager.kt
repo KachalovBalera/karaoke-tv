@@ -268,7 +268,7 @@ class PhoneServerManager(
 
                 uriPath == "/api/search" && method == "GET" -> {
                     val q = queryParams["q"] ?: ""
-                    val result = searchUseCase.execute(q, SourceType.GOOGLE_DRIVE)
+                    val result = searchUseCase.execute(q, null)
                     val jsonArray = JSONArray()
                     for (song in result.songs) {
                         val songObj = JSONObject().apply {
@@ -351,7 +351,7 @@ class PhoneServerManager(
                         queueRepository.addToQueue(domainSong, domainVer, participant)
                     } else {
                         // Fallback: create Google Drive queue item
-                        val cleanVideoId = versionId.removePrefix("gdrive_ver_").removePrefix("gdrive_").removePrefix("rutube_").trim()
+                        val cleanVideoId = versionId.removePrefix("gdrive_ver_").removePrefix("gdrive_").removePrefix("local_").trim()
                         val mediaUrl = if (cleanVideoId.isNotBlank()) "https://www.googleapis.com/drive/v3/files/$cleanVideoId?alt=media" else ""
                         val dummySong = Song(
                             id = songId.ifBlank { "song_${System.currentTimeMillis()}" },
@@ -575,7 +575,7 @@ class PhoneServerManager(
                 put("status", item.status.name)
                 put("position", item.position)
                 put("versionTitle", item.selectedVersion?.title ?: "")
-                put("versionSource", item.selectedVersion?.source?.displayName ?: "RUTUBE")
+                put("versionSource", item.selectedVersion?.source?.displayName ?: "Локальный сервер")
             })
         }
         return array.toString()

@@ -183,7 +183,7 @@ fun PhoneConnectScreen(
             }
 
             Text(
-                text = "Управляйте караоке, ищите песни на RUTUBE и добавляйте треки в очередь прямо со смартфона без установки приложений!",
+                text = "Управляйте караоке, ищите песни в каталоге и добавляйте треки в очередь прямо со смартфона без установки приложений!",
                 color = TextSecondary,
                 fontSize = 15.sp,
                 lineHeight = 20.sp
@@ -324,7 +324,7 @@ fun PhoneConnectScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Default.Smartphone, contentDescription = null, tint = AccentPink, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "3. В браузере откроется пульт: ищите караоке RUTUBE и пойте!", color = TextPrimary, fontSize = 14.sp)
+                        Text(text = "3. В браузере откроется пульт: выбирайте любимые песни и пойте!", color = TextPrimary, fontSize = 14.sp)
                     }
                 }
             }
