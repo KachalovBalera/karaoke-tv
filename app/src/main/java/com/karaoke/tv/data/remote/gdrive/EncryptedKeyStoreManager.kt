@@ -129,6 +129,23 @@ object EncryptedKeyStoreManager {
     }
 
     /**
+     * Cleans up any leftover unencrypted staging files if present.
+     */
+    fun cleanLingeringStagingFile(context: Context) {
+        val stagingLocations = listOfNotNull(
+            File(context.getExternalFilesDir(null), STAGING_FILE_NAME),
+            File("/sdcard/Android/data/${context.packageName}/files/$STAGING_FILE_NAME"),
+            File("/sdcard/Download/$STAGING_FILE_NAME")
+        )
+        for (stagingFile in stagingLocations) {
+            if (stagingFile.exists() && stagingFile.isFile) {
+                secureWipeAndDelete(stagingFile)
+                Log.i(TAG, "Lingering staging file securely deleted: ${stagingFile.absolutePath}")
+            }
+        }
+    }
+
+    /**
      * Deletes the encrypted credentials and removes the Keystore entry (for rotation/revocation).
      */
     fun deleteCredentials(context: Context): Boolean {

@@ -266,6 +266,7 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 EncryptedKeyStoreManager.deleteCredentials(getApplication())
+                googleAuthManager.clearCredentials()
             }
             _uiState.value = _uiState.value.copy(
                 isGoogleDriveConnected = false,

@@ -35,11 +35,21 @@ class SearchKaraokeUseCase(
         // Record search history
         database.historyDao().insertSearchQuery(SearchHistoryEntity(trimmedQuery))
 
-        // First check local DB for instant offline responsiveness (normalized search)
+        // First check local DB for instant offline responsiveness (normalized search with aliases)
         val normalized = com.karaoke.tv.domain.engine.SongFilenameParser.normalize(trimmedQuery)
-        val localEntities = database.songDao().searchSongsNormalized(normalized).ifEmpty {
-            database.songDao().searchSongs(trimmedQuery)
+        val searchVariants = mutableListOf(normalized)
+        if (normalized.contains("кино")) {
+            searchVariants.add("цой")
         }
+        if (normalized.contains("киш")) {
+            searchVariants.add("король и шут")
+        }
+
+        val localEntities = searchVariants.flatMap { variant ->
+            database.songDao().searchSongsNormalized(variant).ifEmpty {
+                database.songDao().searchSongs(trimmedQuery)
+            }
+        }.distinctBy { it.id }
         val localSongs = localEntities.map { entity ->
             val versions = database.karaokeVersionDao().getVersionsForSong(entity.id).map { it.toDomain() }
             val rankedVersions = rankUseCase.rank(versions, rankingPreferences)

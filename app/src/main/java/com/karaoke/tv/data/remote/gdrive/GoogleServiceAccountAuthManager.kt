@@ -91,6 +91,7 @@ class GoogleServiceAccountAuthManager(
         // 1. Hardware Keystore encrypted credentials (production path)
         val encryptedJson = EncryptedKeyStoreManager.loadDecryptedCredentials(context)
         if (!encryptedJson.isNullOrBlank()) {
+            EncryptedKeyStoreManager.cleanLingeringStagingFile(context)
             return runCatching {
                 loadCredentialsFromJson(encryptedJson)
                 Log.i(TAG, "Successfully loaded credentials from hardware Keystore")
@@ -211,6 +212,15 @@ class GoogleServiceAccountAuthManager(
         get() = cachedCredentials != null
 
     fun hasCredentials(): Boolean = isConfigured
+
+    /**
+     * Clears in-memory credentials and access token.
+     */
+    fun clearCredentials() {
+        cachedCredentials = null
+        cachedAccessToken = null
+        tokenExpiresAtSec = 0L
+    }
 
     /**
      * Returns the client email of loaded credentials, or null.
