@@ -97,7 +97,7 @@ object WebAssets {
     <div class="now-playing" id="nowPlayingBar">
         <div style="flex: 1; min-width: 0; padding-right: 10px;">
             <div class="now-title" id="nowTitle">Сейчас никто не поёт</div>
-            <div class="now-artist" id="nowArtist">Добавьте песню из поиска RUTUBE!</div>
+            <div class="now-artist" id="nowArtist">Добавьте песню из каталога Google Drive!</div>
             <div class="now-singer" id="nowSinger"></div>
         </div>
         <div class="playback-controls">
@@ -115,14 +115,15 @@ object WebAssets {
         <div id="queueList">Загрузка очереди...</div>
     </div>
 
-    <!-- TAB 2: ПОИСК RUTUBE -->
+    <!-- TAB 2: ПОИСК GOOGLE DRIVE -->
     <div id="tabSearch" class="tab-content">
         <div class="search-container">
             <input type="text" id="searchInput" class="search-input" placeholder="Название песни или артист..." onkeydown="if(event.key==='Enter') searchSongs()">
+            <button class="search-btn" id="voiceBtn" onclick="startVoiceRecognition()" title="Голосовой поиск" style="background: var(--surface-card); border: 1.5px solid var(--secondary); font-size: 1.1rem; padding: 0 14px;">🎙</button>
             <button class="search-btn" onclick="searchSongs()">Найти</button>
         </div>
         <div style="margin-bottom: 14px; font-size: 0.85rem; color: var(--secondary);">
-            ⭐ Источник: <b>RUTUBE Караоке с текстом Full HD</b>
+            ⭐ Источник: <b>Google Диск (караоке MP4)</b>
         </div>
         <div id="searchResults">Введите название и нажмите «Найти»</div>
     </div>
@@ -271,7 +272,7 @@ object WebAssets {
                 document.getElementById('nowSinger').innerText = '🎤 Поёт: ' + (playback.participant || 'Гость');
             } else {
                 document.getElementById('nowTitle').innerText = 'Сейчас никто не поёт';
-                document.getElementById('nowArtist').innerText = 'Добавьте песню из поиска RUTUBE!';
+                document.getElementById('nowArtist').innerText = 'Добавьте песню из каталога Google Drive!';
                 document.getElementById('nowSinger').innerText = '';
             }
         }
@@ -321,17 +322,52 @@ object WebAssets {
             } catch(e) {}
         }
 
+        function startVoiceRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert('Голосовой поиск не поддерживается данным браузером. Откройте пульт в Google Chrome.');
+                return;
+            }
+            const btn = document.getElementById('voiceBtn');
+            const origText = btn ? btn.innerText : '🎙';
+            if (btn) btn.innerText = '🔴';
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'ru-RU';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            recognition.onresult = function(event) {
+                if (btn) btn.innerText = origText;
+                const text = event.results[0][0].transcript;
+                if (text && text.trim()) {
+                    document.getElementById('searchInput').value = text.trim();
+                    searchSongs();
+                    fetch('/api/remote/voice?token=' + sessionToken, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: text.trim() })
+                    }).catch(function() {});
+                }
+            };
+            recognition.onerror = function() {
+                if (btn) btn.innerText = origText;
+            };
+            recognition.onend = function() {
+                if (btn) btn.innerText = origText;
+            };
+            recognition.start();
+        }
+
         async function searchSongs() {
             const query = document.getElementById('searchInput').value.trim();
             if (!query) return;
             const results = document.getElementById('searchResults');
-            results.innerHTML = '<div style="color: var(--text-muted); padding: 16px;">Поиск караоке на RUTUBE...</div>';
+            results.innerHTML = '<div style="color: var(--text-muted); padding: 16px;">Поиск караоке в Google Drive...</div>';
             
             try {
                 const resp = await fetch('/api/search?q=' + encodeURIComponent(query) + '&token=' + sessionToken);
                 const songs = await resp.json();
                 if (!songs || songs.length === 0) {
-                    results.innerHTML = '<div style="color: var(--text-muted); padding: 16px;">Ничего не найдено на RUTUBE.</div>';
+                    results.innerHTML = '<div style="color: var(--text-muted); padding: 16px;">Ничего не найдено в каталоге.</div>';
                     return;
                 }
                 let html = '';
@@ -348,7 +384,7 @@ object WebAssets {
                     html += '<div class="song-title">' + song.title + '</div>';
                     html += '<div class="song-artist">' + song.artist + '</div>';
                     if (bestVer) {
-                        html += '<div style="font-size: 0.75rem; color: var(--secondary); margin-top: 2px;">RUTUBE Full HD • ' + (bestVer.duration || 'Караоке') + '</div>';
+                        html += '<div style="font-size: 0.75rem; color: var(--secondary); margin-top: 2px;">Google Drive MP4 • ' + (bestVer.duration || 'Караоке') + '</div>';
                     }
                     html += '</div>';
                     html += '<button class="btn-add" onclick="addSongToQueue(\'' + song.id + '\', \'' + escapeHtml(song.title) + '\', \'' + escapeHtml(song.artist) + '\', \'' + vId + '\', \'' + thumbUrl + '\')">+ В очередь</button>';

@@ -103,15 +103,25 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode == RESULT_OK) {
             val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
             if (!spoken.isNullOrBlank()) {
-                viewModel.onSearchQueryChanged(spoken)
-                viewModel.executeSearch(spoken)
-                viewModel.selectNavIndex(1) // Jump to search screen
+                viewModel.triggerVoiceSearch(spoken)
             }
+        }
+    }
+
+    private val audioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startVoiceSearchIntent()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        viewModel.phoneServerManager.onVoiceSearchQuery = { spokenQuery ->
+            viewModel.triggerVoiceSearch(spokenQuery)
+        }
 
         setContent {
             KaraokeTVTheme {
@@ -204,6 +214,8 @@ class MainActivity : ComponentActivity() {
                                     onQueryChange = { viewModel.onSearchQueryChanged(it) },
                                     onSearch = { viewModel.executeSearch(it) },
                                     searchResults = uiState.searchResults,
+                                    searchSuggestions = uiState.searchSuggestions,
+                                    onClearSuggestions = { viewModel.clearSuggestions() },
                                     isLoading = uiState.isSearching,
                                     sourceFilter = uiState.sourceFilter,
                                     onFilterChange = { viewModel.setSourceFilter(it) },
@@ -380,12 +392,29 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun launchVoiceSearch() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.RECORD_AUDIO
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            startVoiceSearchIntent()
+        } else {
+            audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun startVoiceSearchIntent() {
         runCatching {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ru-RU", "en-US"))
                 putExtra(RecognizerIntent.EXTRA_PROMPT, "Назовите песню или исполнителя")
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             }
             voiceLauncher.launch(intent)
+        }.onFailure { e ->
+            Log.e("MainActivity", "Failed to launch voice search: ${e.message}", e)
         }
     }
 

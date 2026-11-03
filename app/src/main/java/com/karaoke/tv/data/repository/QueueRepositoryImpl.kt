@@ -2,6 +2,7 @@ package com.karaoke.tv.data.repository
 
 import com.karaoke.tv.data.local.KaraokeDatabase
 import com.karaoke.tv.data.local.entity.QueueItemEntity
+import com.karaoke.tv.data.local.entity.toDomain
 import com.karaoke.tv.domain.model.KaraokeVersion
 import com.karaoke.tv.domain.model.QueueItem
 import com.karaoke.tv.domain.model.QueueStatus
@@ -213,28 +214,5 @@ class QueueRepositoryImpl(
                 database.queueDao().updateItem(entity.copy(position = idx, status = expectedStatus))
             }
         }
-    }
-
-    private fun com.karaoke.tv.data.local.entity.KaraokeVersionEntity.toDomain(): KaraokeVersion {
-        return KaraokeVersion(
-            id = id,
-            songId = songId,
-            source = source,
-            sourceVideoId = sourceVideoId,
-            title = title,
-            channelOrAuthor = channelOrAuthor,
-            thumbnailUrl = thumbnailUrl,
-            durationSeconds = durationSeconds,
-            videoUrl = videoUrl,
-            embedUrl = embedUrl,
-            quality = quality,
-            karaokeScore = karaokeScore,
-            userRatingAverage = userRatingAverage,
-            ratingCount = ratingCount,
-            isEmbeddable = isEmbeddable,
-            verificationStatus = verificationStatus,
-            availabilityStatus = availabilityStatus,
-            lastCheckedTs = lastCheckedTs
-        )
     }
 }

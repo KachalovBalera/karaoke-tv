@@ -1,5 +1,6 @@
 package com.karaoke.tv.presentation.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -46,6 +48,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karaoke.tv.domain.model.Song
@@ -68,6 +71,8 @@ fun SearchScreen(
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     searchResults: List<Song>,
+    searchSuggestions: List<Song> = emptyList(),
+    onClearSuggestions: () -> Unit = {},
     isLoading: Boolean,
     sourceFilter: SourceType?,
     onFilterChange: (SourceType?) -> Unit,
@@ -76,6 +81,11 @@ fun SearchScreen(
     onSongSelected: (Song) -> Unit,
     onVoiceInputRequested: () -> Unit
 ) {
+    if (searchSuggestions.isNotEmpty()) {
+        BackHandler {
+            onClearSuggestions()
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -192,6 +202,90 @@ fun SearchScreen(
                     tint = if (micFocused) Color.White else SecondaryCyan,
                     modifier = Modifier.size(30.dp)
                 )
+            }
+        }
+
+        // Live Search Suggestions Dropdown (Local Room Database autocomplete)
+        if (searchSuggestions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xF0111022))
+                    .border(1.5.dp, PrimaryPurpleGlow.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = "Подсказки из каталога Google Drive (нажмите ОК для выбора):",
+                    color = SecondaryCyan,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+
+                searchSuggestions.take(8).forEach { song ->
+                    val sInteraction = remember { MutableInteractionSource() }
+                    val sFocused by sInteraction.collectIsFocusedAsState()
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (sFocused) SurfaceCardFocused else Color.Transparent)
+                            .border(
+                                width = if (sFocused) 2.dp else 0.dp,
+                                color = if (sFocused) PrimaryPurpleGlow else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .focusable(interactionSource = sInteraction)
+                            .clickable(interactionSource = sInteraction, indication = null) {
+                                onClearSuggestions()
+                                onSongSelected(song)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = if (sFocused) PrimaryPurpleGlow else SecondaryCyan,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = song.title,
+                                color = TextPrimary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "—  ${song.artist}",
+                                color = if (sFocused) Color.White else SecondaryCyan,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        val quality = song.bestVersion?.quality?.takeIf { it.isNotBlank() } ?: "MP4"
+                        Text(
+                            text = quality,
+                            color = TextMuted,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
 

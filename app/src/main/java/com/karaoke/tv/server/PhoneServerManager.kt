@@ -74,6 +74,7 @@ class PhoneServerManager(
 
     private var latestQueueJson: String = "[]"
     private var currentPlayingInfoJson: String = "{}"
+    var onVoiceSearchQuery: ((String) -> Unit)? = null
 
     fun start() {
         if (isRunning) return
@@ -417,6 +418,16 @@ class PhoneServerManager(
                             onPlayerAction("skip")
                             queueRepository.skipCurrent()
                         }
+                    }
+                    sendResponse(output, 200, "application/json", """{"status":"ok"}""")
+                }
+
+                uriPath == "/api/remote/voice" && method == "POST" -> {
+                    val body = readBody(input, headers["content-length"]?.toIntOrNull() ?: 0).removePrefix("\uFEFF").trim()
+                    val json = runCatching { JSONObject(body) }.getOrDefault(JSONObject())
+                    val query = json.optString("query").trim()
+                    if (query.isNotBlank()) {
+                        onVoiceSearchQuery?.invoke(query)
                     }
                     sendResponse(output, 200, "application/json", """{"status":"ok"}""")
                 }

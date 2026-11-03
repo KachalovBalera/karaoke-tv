@@ -30,6 +30,7 @@ import com.karaoke.tv.soundcore.SoundcoreManager
 import com.karaoke.tv.update.AppUpdateInfo
 import com.karaoke.tv.update.UpdateManager
 import com.karaoke.tv.update.UpdateStatus
+import com.karaoke.tv.data.local.entity.toDomain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -74,7 +75,8 @@ data class UiState(
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
     val showUpdateDialog: Boolean = false,
     val currentAppVersion: String = "1.0.0",
-    val customManifestUrl: String = ""
+    val customManifestUrl: String = "",
+    val searchSuggestions: List<Song> = emptyList()
 )
 
 class KaraokeViewModel(application: Application) : AndroidViewModel(application) {
@@ -292,14 +294,85 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         _uiState.value = _uiState.value.copy(selectedNavIndex = index)
     }
 
+    private var suggestionJob: kotlinx.coroutines.Job? = null
+
     fun onSearchQueryChanged(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
+        suggestionJob?.cancel()
+        val trimmed = query.trim()
+        if (trimmed.length >= 1) {
+            suggestionJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(180) // 180ms debounce
+                val suggestions = withContext(Dispatchers.IO) {
+                    fetchSuggestions(trimmed)
+                }
+                _uiState.value = _uiState.value.copy(searchSuggestions = suggestions)
+            }
+        } else {
+            _uiState.value = _uiState.value.copy(searchSuggestions = emptyList())
+        }
+    }
+
+    fun clearSuggestions() {
+        _uiState.value = _uiState.value.copy(searchSuggestions = emptyList())
+    }
+
+    private suspend fun fetchSuggestions(query: String): List<Song> {
+        val normalized = com.karaoke.tv.domain.engine.SongFilenameParser.normalize(query)
+        val queries = mutableListOf(normalized)
+        if (normalized.contains("кино")) queries.add("цой")
+        if (normalized.contains("киш")) queries.add("король и шут")
+
+        val rawCandidates = queries.flatMap { q ->
+            db.songDao().searchSongsNormalized(q).ifEmpty {
+                db.songDao().searchSongs(query)
+            }
+        }.distinctBy { it.id }
+
+        // Rank candidates: exact matches (100) -> prefix matches (80) -> contains (60)
+        val sorted = rawCandidates.sortedByDescending { entity ->
+            val normTitle = com.karaoke.tv.domain.engine.SongFilenameParser.normalize(entity.title)
+            val normArtist = com.karaoke.tv.domain.engine.SongFilenameParser.normalize(entity.artist)
+            when {
+                normTitle == normalized || normArtist == normalized -> 100
+                normTitle.startsWith(normalized) || normArtist.startsWith(normalized) -> 80
+                normTitle.contains(normalized) -> 60
+                else -> 40
+            }
+        }.take(8)
+
+        return sorted.map { entity ->
+            val versions = db.karaokeVersionDao().getVersionsForSong(entity.id).map { it.toDomain() }
+            val best = versions.maxByOrNull { it.quality } ?: versions.firstOrNull()
+            Song(
+                id = entity.id,
+                title = entity.title,
+                artist = entity.artist,
+                coverUrl = best?.thumbnailUrl?.takeIf { it.isNotBlank() } ?: entity.coverUrl,
+                category = entity.category,
+                versions = versions,
+                bestVersionId = best?.id
+            )
+        }
+    }
+
+    fun triggerVoiceSearch(query: String) {
+        val clean = query.trim()
+        if (clean.isBlank()) return
+        onSearchQueryChanged(clean)
+        executeSearch(clean)
+        selectNavIndex(1)
     }
 
     fun executeSearch(query: String) {
         if (query.isBlank()) return
+        suggestionJob?.cancel()
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSearching = true, sourceErrors = emptyMap())
+            _uiState.value = _uiState.value.copy(
+                isSearching = true,
+                sourceErrors = emptyMap(),
+                searchSuggestions = emptyList()
+            )
             val result = withContext(Dispatchers.IO) {
                 searchUseCase.execute(
                     query = query,
@@ -498,17 +571,16 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun closePlayer(removeFromQueue: Boolean = false, goToSearchIfEmptyQueue: Boolean = true) {
+    fun closePlayer(removeFromQueue: Boolean = false, goToSearchIfEmptyQueue: Boolean = false) {
         viewModelScope.launch {
             val current = _uiState.value.activePlayingItem
             if (removeFromQueue && current != null) {
                 queueRepository.removeFromQueue(current.id)
             }
-            val remaining = queueRepository.getQueue()
             _uiState.value = _uiState.value.copy(
                 isPlayerOpen = false,
-                activePlayingItem = if (removeFromQueue) null else current,
-                selectedNavIndex = if (goToSearchIfEmptyQueue && remaining.isEmpty()) 1 else _uiState.value.selectedNavIndex
+                activePlayingItem = null,
+                selectedNavIndex = 0 // Return to main catalog
             )
             phoneServerManager.updateCurrentPlayback("", "", "", false)
         }
@@ -518,7 +590,22 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val current = _uiState.value.activePlayingItem
             if (current != null) {
-                // Удаляем завершенный трек из очереди
+                // Silently record performance history and increment singing count
+                runCatching {
+                    db.historyDao().insertHistory(
+                        PlaybackHistoryEntity(
+                            songId = current.songId,
+                            versionId = current.selectedVersion?.id ?: current.selectedVersionId,
+                            title = current.songTitle,
+                            artist = current.songArtist,
+                            participantName = current.participantName,
+                            source = current.selectedVersion?.source ?: SourceType.GOOGLE_DRIVE,
+                            playedAt = System.currentTimeMillis()
+                        )
+                    )
+                    db.songDao().incrementTimesSung(current.songId)
+                }
+                // Remove finished song from queue
                 queueRepository.removeFromQueue(current.id)
             }
 
@@ -526,37 +613,17 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
             val next = remaining.firstOrNull()
 
             if (next != null) {
-                var effectiveNext = next
-                val ver = effectiveNext.selectedVersion
-                if (ver != null && ver.source == SourceType.RUTUBE) {
-                    val rawId = ver.sourceVideoId.removePrefix("rutube_").trim()
-                    if (isCataloguePlaceholder(rawId) || rawId.length < 20) {
-                        val resolvedRutubeId = CategoryCatalogue.resolveRutubeId(effectiveNext.songArtist, effectiveNext.songTitle)
-                        if (!resolvedRutubeId.isNullOrBlank()) {
-                            val realThumb = CategoryCatalogue.resolveRutubeThumbnail(effectiveNext.songArtist, effectiveNext.songTitle) ?: ""
-                            val resolvedVersion = ver.copy(
-                                source = SourceType.RUTUBE,
-                                sourceVideoId = resolvedRutubeId,
-                                thumbnailUrl = realThumb.ifBlank { ver.thumbnailUrl },
-                                embedUrl = "https://rutube.ru/play/embed/$resolvedRutubeId",
-                                videoUrl = "https://rutube.ru/video/$resolvedRutubeId/"
-                            )
-                            effectiveNext = effectiveNext.copy(selectedVersion = resolvedVersion)
-                        }
-                    }
-                }
-
                 _uiState.value = _uiState.value.copy(
-                    activePlayingItem = effectiveNext,
+                    activePlayingItem = next,
                     isPlayerOpen = true
                 )
-                phoneServerManager.updateCurrentPlayback(effectiveNext.songTitle, effectiveNext.songArtist, effectiveNext.participantName, true)
+                phoneServerManager.updateCurrentPlayback(next.songTitle, next.songArtist, next.participantName, true)
             } else {
-                // Если очередь пуста: закрываем плеер и автоматически открываем меню поиска песен!
+                // Queue is empty: close player seamlessly and return to main catalog
                 _uiState.value = _uiState.value.copy(
                     isPlayerOpen = false,
                     activePlayingItem = null,
-                    selectedNavIndex = 1
+                    selectedNavIndex = 0
                 )
                 phoneServerManager.updateCurrentPlayback("", "", "", false)
             }

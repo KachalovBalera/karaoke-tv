@@ -547,12 +547,12 @@ fun MockKaraokeCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(targetValue = if (isFocused) 1.05f else 1.0f, label = "cardScale")
+    val scale by animateFloatAsState(targetValue = if (isFocused) 1.06f else 1.0f, label = "cardScale")
 
     Box(
         modifier = Modifier
             .width(260.dp)
-            .height(150.dp)
+            .height(160.dp)
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF131122))
@@ -569,7 +569,7 @@ fun MockKaraokeCard(
                 onLongClick = onLongClick
             )
     ) {
-        // Real source cover image via Coil AsyncImage
+        // 1. Cover Image or Universal Concert Background
         if (item.coverUrl.isNotBlank()) {
             AsyncImage(
                 model = item.coverUrl,
@@ -578,22 +578,30 @@ fun MockKaraokeCard(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF1A162B)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
+            Box(modifier = Modifier.fillMaxSize()) {
+                Image(
+                    painter = painterResource(id = R.drawable.concert_bg),
                     contentDescription = null,
-                    tint = PrimaryPurpleGlow.copy(alpha = 0.6f),
-                    modifier = Modifier.size(44.dp)
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x77070914)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = PrimaryPurpleGlow.copy(alpha = 0.35f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
             }
         }
 
-        // Bottom gradient scrim for text readability
+        // 2. High-contrast vertical gradient overlay for text readability
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -601,74 +609,61 @@ fun MockKaraokeCard(
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color(0x77000000),
-                            Color(0xF5000000)
+                            Color(0x44000000),
+                            Color(0xCC070A18),
+                            Color(0xF8070A18)
                         ),
-                        startY = 30f
+                        startY = 20f
                     )
                 )
         )
 
-        // Source / Quality Badge (Top Right)
-        val badgeText = when (item.source) {
-            SourceType.GOOGLE_DRIVE -> "Google Drive"
-            SourceType.RUTUBE -> "RUTUBE"
-            else -> item.source.displayName
-        }
-        val badgeColor = when (item.source) {
-            SourceType.GOOGLE_DRIVE -> Color(0xFF1EA362)
-            else -> Color(0xFF7C3AED)
-        }
+        // 3. Source / Quality Badge (Top Right)
+        val badgeText = if (item.duration.isNotBlank() && item.duration != "MP4") item.duration else "1080p / MP4"
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(badgeColor)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xDD1E1B4B))
+                .border(1.dp, SecondaryCyan.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
         ) {
             Text(
                 text = badgeText,
                 color = Color.White,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp
             )
         }
 
-        // Artist & Title (Bottom Left)
+        // 4. Large Contrasting Song Title and Artist (Inside card, bottom)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(12.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Text(
-                text = item.artist,
-                color = Color.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
                 text = item.title,
-                color = Color(0xFFE2E8F0),
-                fontSize = 15.sp,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 22.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = item.artist,
+                color = SecondaryCyan,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-
-        // Duration (Bottom Right)
-        Text(
-            text = item.duration,
-            color = Color(0xFFCBD5E1),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(12.dp)
-        )
     }
 }
 

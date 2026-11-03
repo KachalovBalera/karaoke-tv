@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -35,14 +37,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.karaoke.tv.R
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.karaoke.tv.domain.model.KaraokeVersion
@@ -71,16 +76,17 @@ fun TvSongCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(targetValue = if (isFocused) 1.08f else 1.0f, label = "cardScale")
+    val scale by animateFloatAsState(targetValue = if (isFocused) 1.06f else 1.0f, label = "cardScale")
 
     Box(
         modifier = modifier
             .width(260.dp)
+            .height(160.dp)
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (isFocused) SurfaceCardFocused else SurfaceCard)
+            .background(Color(0xFF131122))
             .border(
-                border = if (isFocused) BorderStroke(3.dp, PrimaryPurpleGlow) else BorderStroke(1.dp, Color(0xFF2A2A40)),
+                border = if (isFocused) BorderStroke(3.5.dp, PrimaryPurpleGlow) else BorderStroke(1.dp, Color(0xFF26203D)),
                 shape = RoundedCornerShape(16.dp)
             )
             .focusable(interactionSource = interactionSource)
@@ -91,95 +97,100 @@ fun TvSongCard(
                 onLongClick = onLongClick
             )
     ) {
-        Column {
-            // Cover Image
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-                    .background(Color.Black)
-            ) {
-                if (song.coverUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = song.coverUrl,
-                        contentDescription = song.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.matchParentSize()
+        // 1. Cover Image or Universal Concert Background
+        if (song.coverUrl.isNotBlank()) {
+            AsyncImage(
+                model = song.coverUrl,
+                contentDescription = "${song.artist} - ${song.title}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Image(
+                    painter = painterResource(id = R.drawable.concert_bg),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x77070914)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = PrimaryPurpleGlow.copy(alpha = 0.35f),
+                        modifier = Modifier.size(48.dp)
                     )
                 }
+            }
+        }
 
-                // Best version source badge
-                song.bestVersion?.let { ver ->
-                    SourceBadge(
-                        source = ver.source,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
+        // 2. High-contrast vertical gradient overlay for text readability
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0x44000000),
+                            Color(0xCC070A18),
+                            Color(0xF8070A18)
+                        ),
+                        startY = 20f
                     )
-                }
-
-                // Versions count badge
-                if (song.versions.size > 1) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp)
-                            .background(Color(0xCC000000), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = "${song.versions.size} версий",
-                            color = SecondaryCyan,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // Info (Enlarged for 43-75" TVs)
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = song.title,
-                    color = TextPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = song.artist,
-                    color = TextSecondary,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+        )
 
-                Spacer(modifier = Modifier.height(6.dp))
-                song.bestVersion?.let { ver ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            tint = GoldStar,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (ver.ratingCount > 0) "%.1f".format(ver.userRatingAverage) else "Новое",
-                            color = GoldStar,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = ver.durationFormatted,
-                            color = TextMuted,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            }
+        // 3. Subtle Quality Badge (Top-Right)
+        val qualityText = song.bestVersion?.quality?.takeIf { it.isNotBlank() } ?: "MP4"
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xDD1E1B4B))
+                .border(1.dp, SecondaryCyan.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+        ) {
+            Text(
+                text = qualityText,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+
+        // 4. Large Contrasting Song Title and Artist (Inside card, bottom)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Text(
+                text = song.title,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 22.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = song.artist,
+                color = SecondaryCyan,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

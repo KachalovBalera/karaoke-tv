@@ -169,12 +169,8 @@ fun PlayerScreen(
     var playbackErrorType by remember { mutableStateOf(PlaybackErrorType.UNKNOWN) }
     var errorMessage by remember { mutableStateOf("") }
 
-    var showSongFinishedOverlay by remember { mutableStateOf(false) }
-    val finishFocusRequester = remember { FocusRequester() }
     val playPauseFocusRequester = remember { FocusRequester() }
-
-    var currentRatingStars by remember { mutableStateOf(5) }
-    var selectedReasons by remember { mutableStateOf(listOf(RatingReason.GREAT_TRACK, RatingReason.READABLE_LYRICS)) }
+    var lastInteractionTime by remember { mutableStateOf(SystemClock.uptimeMillis()) }
 
     fun transitionTo(newState: PlaybackState, reason: String) {
         val oldState = playbackState
@@ -225,10 +221,8 @@ fun PlayerScreen(
     }
 
     BackHandler {
-        Log.d("KaraokeDiagnostic", "PLAYER_BACK_PRESSED | state=$playbackState | overlay=$showSongFinishedOverlay | controls=$isControlsVisible")
-        if (showSongFinishedOverlay) {
-            onClosePlayer(true)
-        } else if (isControlsVisible) {
+        Log.d("KaraokeDiagnostic", "PLAYER_BACK_PRESSED | state=$playbackState | controls=$isControlsVisible")
+        if (isControlsVisible) {
             isControlsVisible = false
         } else {
             onClosePlayer(false)
@@ -316,7 +310,6 @@ fun PlayerScreen(
     // CRITICAL: Robust cleanup when PlayerScreen leaves composition or switches queue item
     DisposableEffect(currentQueueItem.id) {
         hasEndedTriggered = false
-        showSongFinishedOverlay = false
         Log.d("KaraokeDiagnostic", "PLAYER_EVENT | START | Song='${currentQueueItem.songArtist} - ${currentQueueItem.songTitle}' | QueueId=${currentQueueItem.id} | Engine=$playerType")
         onDispose {
             Log.d("KaraokeDiagnostic", "PLAYER_EVENT | STOP_CLEANUP | Song='${currentQueueItem.songTitle}' | Disposing all player engines and releasing audio focus")
@@ -463,18 +456,13 @@ fun PlayerScreen(
         }
     }
 
-    val handleSongFinished: (Boolean) -> Unit = { forceOverlay ->
-        if (!isTransitioning && (!hasEndedTriggered || forceOverlay)) {
+    val handleSongFinished: (Boolean) -> Unit = { _ ->
+        if (!isTransitioning && !hasEndedTriggered) {
             hasEndedTriggered = true
             isTransitioning = true
-            transitionTo(PlaybackState.ENDED, if (forceOverlay) "Manual completion" else "Media ended")
-            if (!forceOverlay && nextInQueue != null) {
-                Log.d("KaraokeDiagnostic", "PLAYER_EVENT | FINISHED | Next song in queue: '${nextInQueue.songTitle}'. Auto-advancing.")
-                onSongEnded()
-            } else {
-                Log.d("KaraokeDiagnostic", "PLAYER_EVENT | FINISHED | Displaying 'Песня завершена' overlay. Next: ${nextInQueue?.songTitle ?: "none"}")
-                showSongFinishedOverlay = true
-            }
+            transitionTo(PlaybackState.ENDED, "Media ended")
+            Log.d("KaraokeDiagnostic", "PLAYER_EVENT | FINISHED | Auto-advancing queue without rating screen")
+            onSongEnded()
         }
     }
 
@@ -488,7 +476,6 @@ fun PlayerScreen(
 
     val triggerReplay: () -> Unit = {
         Log.d("KaraokeDiagnostic", "PLAYER_EVENT | REPLAY | User requested to sing again: ${currentQueueItem.songTitle}")
-        showSongFinishedOverlay = false
         hasEndedTriggered = false
         transitionTo(PlaybackState.PLAYING, "Replay initiated")
         when (playerType) {
@@ -526,25 +513,18 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(showSongFinishedOverlay) {
-        if (showSongFinishedOverlay) {
-            delay(150)
-            try { finishFocusRequester.requestFocus() } catch(e: Exception) {}
-        }
-    }
-
     LaunchedEffect(isControlsVisible) {
-        if (isControlsVisible && !showSongFinishedOverlay) {
+        if (isControlsVisible) {
             delay(100)
-            try { playPauseFocusRequester.requestFocus() } catch(e: Exception) {}
-        } else if (!isControlsVisible && !showSongFinishedOverlay) {
-            try { mainFocusRequester.requestFocus() } catch(e: Exception) {}
+            try { playPauseFocusRequester.requestFocus() } catch (e: Exception) {}
+        } else {
+            try { mainFocusRequester.requestFocus() } catch (e: Exception) {}
         }
     }
 
-    // Auto-hide TV controls overlay after 5 seconds of continuous playback
-    LaunchedEffect(isControlsVisible, isPlaying) {
-        if (isControlsVisible && isPlaying && !hasPlaybackError && !showSongFinishedOverlay) {
+    // Auto-hide TV controls overlay after 5 seconds of continuous playback without interaction
+    LaunchedEffect(isControlsVisible, isPlaying, lastInteractionTime) {
+        if (isControlsVisible && isPlaying && !hasPlaybackError) {
             delay(5000)
             isControlsVisible = false
         }
@@ -565,59 +545,79 @@ fun PlayerScreen(
             .focusable()
             .onKeyEvent { keyEvent ->
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    lastInteractionTime = SystemClock.uptimeMillis()
                     when (keyEvent.key) {
-                        Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-                            if (!isControlsVisible && !showSongFinishedOverlay) {
+                        Key.DirectionCenter, Key.Enter -> {
+                            if (!isControlsVisible) {
                                 togglePlayPause()
                                 isControlsVisible = true
+                                coroutineScope.launch {
+                                    delay(50)
+                                    try { playPauseFocusRequester.requestFocus() } catch (e: Exception) {}
+                                }
                                 true
                             } else {
                                 // Controls are open: let the focused TvButton handle Enter/Center click
                                 false
                             }
                         }
-                        Key.DirectionLeft, Key.MediaRewind -> {
-                            if (!showSongFinishedOverlay) {
-                                exoPlayerRef?.let { player ->
-                                    val newPos = (player.currentPosition - 10_000L).coerceAtLeast(0L)
-                                    player.seekTo(newPos)
-                                    isControlsVisible = true
-                                    true
-                                } ?: run {
-                                    isControlsVisible = true
-                                    false
-                                }
-                            } else false
+                        Key.MediaPlayPause -> {
+                            togglePlayPause()
+                            isControlsVisible = true
+                            coroutineScope.launch {
+                                delay(50)
+                                try { playPauseFocusRequester.requestFocus() } catch (e: Exception) {}
+                            }
+                            true
                         }
-                        Key.DirectionRight, Key.MediaFastForward -> {
-                            if (!showSongFinishedOverlay) {
-                                exoPlayerRef?.let { player ->
-                                    val duration = player.duration.coerceAtLeast(0L)
-                                    val newPos = (player.currentPosition + 10_000L).coerceAtMost(duration)
-                                    player.seekTo(newPos)
-                                    isControlsVisible = true
-                                    true
-                                } ?: run {
-                                    isControlsVisible = true
-                                    false
+                        Key.DirectionLeft, Key.DirectionRight -> {
+                            if (!isControlsVisible) {
+                                isControlsVisible = true
+                                coroutineScope.launch {
+                                    delay(50)
+                                    try { playPauseFocusRequester.requestFocus() } catch (e: Exception) {}
                                 }
-                            } else false
+                                true
+                            } else {
+                                // Controls visible: let focus system move between onscreen buttons without seeking!
+                                false
+                            }
                         }
                         Key.DirectionUp, Key.DirectionDown -> {
-                            if (!showSongFinishedOverlay) {
+                            if (!isControlsVisible) {
+                                isControlsVisible = true
+                                coroutineScope.launch {
+                                    delay(50)
+                                    try { playPauseFocusRequester.requestFocus() } catch (e: Exception) {}
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        Key.MediaRewind -> {
+                            exoPlayerRef?.let { player ->
+                                val newPos = (player.currentPosition - 10_000L).coerceAtLeast(0L)
+                                player.seekTo(newPos)
                                 isControlsVisible = true
                             }
-                            false
+                            true
+                        }
+                        Key.MediaFastForward -> {
+                            exoPlayerRef?.let { player ->
+                                val duration = player.duration.coerceAtLeast(0L)
+                                val newPos = (player.currentPosition + 10_000L).coerceAtMost(duration)
+                                player.seekTo(newPos)
+                                isControlsVisible = true
+                            }
+                            true
                         }
                         Key.MediaNext -> {
-                            onSkipNext()
+                            performSkipNext()
                             true
                         }
                         Key.Back -> {
-                            if (showSongFinishedOverlay) {
-                                onClosePlayer(true)
-                                true
-                            } else if (isControlsVisible) {
+                            if (isControlsVisible) {
                                 isControlsVisible = false
                                 true
                             } else {
@@ -1036,7 +1036,7 @@ fun PlayerScreen(
         }
 
         // 1.5. LOADING INDICATOR OVERLAY (eliminates black screen during track transition and buffering)
-        if (playbackState == PlaybackState.LOADING && !hasPlaybackError && !showSongFinishedOverlay) {
+        if (playbackState == PlaybackState.LOADING && !hasPlaybackError) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1172,21 +1172,6 @@ fun PlayerScreen(
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         TvButton(
-                            text = if (isPlaying) "Пауза" else "Играть",
-                            onClick = togglePlayPause,
-                            isPrimary = true,
-                            modifier = Modifier.focusRequester(playPauseFocusRequester),
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        )
-
-                        TvButton(
                             text = "-10 сек",
                             onClick = {
                                 exoPlayerRef?.let { player ->
@@ -1200,6 +1185,21 @@ fun PlayerScreen(
                                     imageVector = Icons.Default.FastRewind,
                                     contentDescription = null,
                                     tint = SecondaryCyan,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        )
+
+                        TvButton(
+                            text = if (isPlaying) "Пауза" else "Играть",
+                            onClick = togglePlayPause,
+                            isPrimary = true,
+                            modifier = Modifier.focusRequester(playPauseFocusRequester),
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
                                     modifier = Modifier.size(28.dp)
                                 )
                             }
@@ -1241,7 +1241,7 @@ fun PlayerScreen(
 
                         TvButton(
                             text = "Завершить",
-                            onClick = { handleSongFinished(true) },
+                            onClick = { onClosePlayer(false) },
                             isPrimary = false,
                             leadingIcon = {
                                 Icon(
@@ -1252,24 +1252,10 @@ fun PlayerScreen(
                                 )
                             }
                         )
-
-                        TvButton(
-                            text = "Поиск песен",
-                            onClick = { onClosePlayer(false) },
-                            isPrimary = false,
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = SecondaryCyan,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        )
                     }
 
                     Text(
-                        text = "ОК — Пауза/Плей • Стрелки — Панель • Назад — Закрыть",
+                        text = "ОК — Пауза/Плей • Стрелки — Навигация • Назад — Закрыть",
                         color = TextMuted,
                         fontSize = 16.sp
                     )
@@ -1381,110 +1367,6 @@ fun PlayerScreen(
                         isPrimary = false,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-            }
-        }
-
-        // 6. SONG FINISHED OVERLAY («Песня завершена» & Рейтинг)
-        if (showSongFinishedOverlay) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xEE0B0B14)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .width(620.dp)
-                        .background(SurfaceCard, RoundedCornerShape(20.dp))
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "🎤 ПЕСНЯ ЗАВЕРШЕНА",
-                        color = GoldStar,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = "${currentQueueItem.songArtist} — ${currentQueueItem.songTitle}",
-                        color = TextPrimary,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Пел(а): ${currentQueueItem.participantName}",
-                        color = SecondaryCyan,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = "Оцените качество минусовки и текста:",
-                        color = TextSecondary,
-                        fontSize = 15.sp
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        (1..5).forEach { star ->
-                            TvButton(
-                                text = "$star ★",
-                                onClick = { currentRatingStars = star },
-                                isPrimary = star <= currentRatingStars
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        TvButton(
-                            text = "Спеть ещё раз",
-                            onClick = triggerReplay,
-                            isPrimary = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusRequester(finishFocusRequester),
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        )
-
-                        TvButton(
-                            text = "Найти другую песню",
-                            onClick = {
-                                activeVersion?.let {
-                                    onRateVersion(it.id, currentRatingStars, selectedReasons)
-                                }
-                                showSongFinishedOverlay = false
-                                onClosePlayer(true)
-                            },
-                            isPrimary = false,
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = SecondaryCyan,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        )
-                    }
                 }
             }
         }

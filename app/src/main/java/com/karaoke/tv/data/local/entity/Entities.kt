@@ -2,6 +2,7 @@ package com.karaoke.tv.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.karaoke.tv.domain.model.KaraokeVersion
 import com.karaoke.tv.domain.model.PlaybackAvailability
 import com.karaoke.tv.domain.model.QueueStatus
 import com.karaoke.tv.domain.model.RatingReason
@@ -43,6 +44,29 @@ data class KaraokeVersionEntity(
     val availabilityStatus: PlaybackAvailability,
     val lastCheckedTs: Long
 )
+
+fun KaraokeVersionEntity.toDomain(): KaraokeVersion {
+    return KaraokeVersion(
+        id = id,
+        songId = songId,
+        source = source,
+        sourceVideoId = sourceVideoId,
+        title = title,
+        channelOrAuthor = channelOrAuthor,
+        thumbnailUrl = thumbnailUrl,
+        durationSeconds = durationSeconds,
+        videoUrl = videoUrl,
+        embedUrl = embedUrl,
+        quality = quality,
+        karaokeScore = karaokeScore,
+        userRatingAverage = userRatingAverage,
+        ratingCount = ratingCount,
+        isEmbeddable = isEmbeddable,
+        verificationStatus = verificationStatus,
+        availabilityStatus = availabilityStatus,
+        lastCheckedTs = lastCheckedTs
+    )
+}
 
 @Entity(tableName = "ratings")
 data class RatingEntity(
