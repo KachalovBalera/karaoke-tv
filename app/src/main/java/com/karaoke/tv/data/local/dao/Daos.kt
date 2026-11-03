@@ -24,14 +24,32 @@ interface SongDao {
     @Query("SELECT * FROM songs ORDER BY createdAt DESC")
     fun getAllSongsFlow(): Flow<List<SongEntity>>
 
+    @Query("SELECT * FROM songs ORDER BY artist COLLATE NOCASE ASC, title COLLATE NOCASE ASC")
+    fun getAllSongsSortedAlphabeticalFlow(): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs ORDER BY timesSung DESC, title COLLATE NOCASE ASC")
+    fun getAllSongsSortedByPopularityFlow(): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs ORDER BY artist COLLATE NOCASE ASC, title COLLATE NOCASE ASC")
+    suspend fun getAllSongs(): List<SongEntity>
+
+    @Query("SELECT COUNT(*) FROM songs")
+    suspend fun getSongCount(): Int
+
     @Query("SELECT * FROM songs WHERE category = :category ORDER BY timesSung DESC")
     suspend fun getSongsByCategory(category: String): List<SongEntity>
 
     @Query("SELECT * FROM songs WHERE id = :id LIMIT 1")
     suspend fun getSongById(id: String): SongEntity?
 
-    @Query("SELECT * FROM songs WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%'")
+    @Query("SELECT * FROM songs WHERE normalizedKey = :normalizedKey LIMIT 1")
+    suspend fun getSongByNormalizedKey(normalizedKey: String): SongEntity?
+
+    @Query("SELECT * FROM songs WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR searchKeywords LIKE '%' || :query || '%'")
     suspend fun searchSongs(query: String): List<SongEntity>
+
+    @Query("SELECT * FROM songs WHERE searchKeywords LIKE '%' || :query || '%' OR title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' ORDER BY artist COLLATE NOCASE ASC, title COLLATE NOCASE ASC")
+    suspend fun searchSongsNormalized(query: String): List<SongEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSongs(songs: List<SongEntity>)
@@ -47,6 +65,9 @@ interface SongDao {
 
     @Query("DELETE FROM songs WHERE id = :id")
     suspend fun deleteSong(id: String)
+
+    @Query("DELETE FROM songs")
+    suspend fun deleteAllSongs()
 }
 
 @Dao
@@ -56,6 +77,12 @@ interface KaraokeVersionDao {
 
     @Query("SELECT * FROM karaoke_versions WHERE id = :versionId LIMIT 1")
     suspend fun getVersionById(versionId: String): KaraokeVersionEntity?
+
+    @Query("SELECT COUNT(*) FROM karaoke_versions")
+    suspend fun getVersionCount(): Int
+
+    @Query("SELECT * FROM karaoke_versions")
+    suspend fun getAllVersions(): List<KaraokeVersionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertVersions(versions: List<KaraokeVersionEntity>)
@@ -68,6 +95,12 @@ interface KaraokeVersionDao {
 
     @Query("DELETE FROM karaoke_versions WHERE id = :versionId")
     suspend fun deleteVersion(versionId: String)
+
+    @Query("DELETE FROM karaoke_versions WHERE songId = :songId")
+    suspend fun deleteVersionsForSong(songId: String)
+
+    @Query("DELETE FROM karaoke_versions")
+    suspend fun deleteAllVersions()
 }
 
 @Dao

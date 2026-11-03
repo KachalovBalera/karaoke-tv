@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
         PlaybackFailureEntity::class,
         SourcePreferenceEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -62,6 +62,13 @@ abstract class KaraokeDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: KaraokeDatabase? = null
 
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE songs ADD COLUMN normalizedKey TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE songs ADD COLUMN searchKeywords TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getInstance(context: Context): KaraokeDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -69,6 +76,7 @@ abstract class KaraokeDatabase : RoomDatabase() {
                     KaraokeDatabase::class.java,
                     "karaoke_tv.db"
                 )
+                    .addMigrations(MIGRATION_1_2)
                     .fallbackToDestructiveMigration()
                     .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {

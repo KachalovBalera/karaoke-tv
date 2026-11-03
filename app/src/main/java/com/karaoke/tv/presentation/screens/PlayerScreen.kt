@@ -77,10 +77,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.karaoke.tv.data.local.CategoryCatalogue
 import com.karaoke.tv.domain.model.KaraokeVersion
@@ -138,6 +144,7 @@ fun PlayerScreen(
     currentQueueItem: QueueItem,
     queueList: List<QueueItem> = emptyList(),
     alternativeVersions: List<KaraokeVersion> = emptyList(),
+    getAccessToken: (suspend (forceRefresh: Boolean) -> String)? = null,
     onSongEnded: () -> Unit,
     onSkipNext: () -> Unit,
     onSwitchVersion: (KaraokeVersion) -> Unit,
@@ -263,7 +270,10 @@ fun PlayerScreen(
             ActivePlayerType.WEBVIEW_EMBED
         } else {
             val url = (activeVersion.videoUrl.ifBlank { activeVersion.embedUrl }).lowercase()
-            val isDirectMedia = url.endsWith(".mp4") || url.endsWith(".m3u8") ||
+            val isGoogleDrive = activeVersion.source == SourceType.GOOGLE_DRIVE ||
+                    url.contains("googleapis.com/drive") ||
+                    url.contains("drive.google.com")
+            val isDirectMedia = isGoogleDrive || url.endsWith(".mp4") || url.endsWith(".m3u8") ||
                     url.endsWith(".mpd") || url.startsWith("file://") ||
                     url.startsWith("content://") || activeVersion.source == SourceType.LOCAL
 
@@ -566,8 +576,33 @@ fun PlayerScreen(
                                 false
                             }
                         }
-                        Key.DirectionRight, Key.MediaFastForward,
-                        Key.DirectionLeft, Key.MediaRewind,
+                        Key.DirectionLeft, Key.MediaRewind -> {
+                            if (!showSongFinishedOverlay) {
+                                exoPlayerRef?.let { player ->
+                                    val newPos = (player.currentPosition - 10_000L).coerceAtLeast(0L)
+                                    player.seekTo(newPos)
+                                    isControlsVisible = true
+                                    true
+                                } ?: run {
+                                    isControlsVisible = true
+                                    false
+                                }
+                            } else false
+                        }
+                        Key.DirectionRight, Key.MediaFastForward -> {
+                            if (!showSongFinishedOverlay) {
+                                exoPlayerRef?.let { player ->
+                                    val duration = player.duration.coerceAtLeast(0L)
+                                    val newPos = (player.currentPosition + 10_000L).coerceAtMost(duration)
+                                    player.seekTo(newPos)
+                                    isControlsVisible = true
+                                    true
+                                } ?: run {
+                                    isControlsVisible = true
+                                    false
+                                }
+                            } else false
+                        }
                         Key.DirectionUp, Key.DirectionDown -> {
                             if (!showSongFinishedOverlay) {
                                 isControlsVisible = true
@@ -599,87 +634,172 @@ fun PlayerScreen(
         if (activeVersion != null && !hasPlaybackError) {
             when (playerType) {
                 ActivePlayerType.EXOPLAYER -> {
-                    // AndroidX Media3 ExoPlayer for direct streams (MP4, HLS, DASH, local files)
-                    DisposableEffect(activeVersion) {
-                        Log.d(TAG, "Initializing ExoPlayer for version: ${activeVersion.title}")
-                        val mediaUrl = activeVersion.videoUrl.ifBlank { activeVersion.embedUrl }
-                        val exoPlayer = ExoPlayer.Builder(context).build().apply {
-                            val mediaItem = MediaItem.fromUri(Uri.parse(mediaUrl))
-                            setMediaItem(mediaItem)
-                            prepare()
-                            playWhenReady = true
-                        }
-                        exoPlayerRef = exoPlayer
+                    // AndroidX Media3 ExoPlayer for direct streams (Google Drive MP4, HLS, DASH, local files)
+                    var bearerToken by remember(activeVersion.id) { mutableStateOf<String?>(null) }
+                    var isAuthPending by remember(activeVersion.id) {
+                        mutableStateOf(activeVersion.source == SourceType.GOOGLE_DRIVE)
+                    }
 
-                        val listener = object : Player.Listener {
-                            override fun onPlaybackStateChanged(state: Int) {
-                                when (state) {
-                                    Player.STATE_BUFFERING -> {
-                                        Log.d(TAG, "ExoPlayer: STATE_BUFFERING")
-                                        transitionTo(PlaybackState.BUFFERING, "ExoPlayer buffering")
-                                    }
-                                    Player.STATE_READY -> {
-                                        Log.d(TAG, "ExoPlayer: STATE_READY")
-                                        transitionTo(if (exoPlayer.isPlaying) PlaybackState.PLAYING else PlaybackState.PAUSED, "ExoPlayer ready")
-                                    }
-                                    Player.STATE_ENDED -> {
-                                        Log.d(TAG, "ExoPlayer: STATE_ENDED")
-                                        handleSongFinished(false)
-                                    }
-                                    else -> {}
-                                }
+                    LaunchedEffect(activeVersion.id) {
+                        if (activeVersion.source == SourceType.GOOGLE_DRIVE) {
+                            try {
+                                Log.d(TAG, "Fetching Google Drive Bearer token for playback of: ${activeVersion.title}")
+                                val token = getAccessToken?.invoke(false)
+                                bearerToken = token
+                                isAuthPending = false
+                                Log.d(TAG, "Google Drive Bearer token successfully acquired for playback")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to get Google Drive access token: ${e.message}", e)
+                                playbackErrorType = PlaybackErrorType.SOURCE_RESTRICTION
+                                errorMessage = "Ошибка доступа к Google Диску: ${e.localizedMessage ?: "Сбой авторизации"}"
+                                transitionTo(PlaybackState.ERROR, "Bearer token acquisition failed")
                             }
-
-                            override fun onIsPlayingChanged(playing: Boolean) {
-                                if (playing) {
-                                    transitionTo(PlaybackState.PLAYING, "ExoPlayer playing")
-                                } else if (exoPlayer.playbackState != Player.STATE_ENDED) {
-                                    transitionTo(PlaybackState.PAUSED, "ExoPlayer not playing")
-                                }
-                            }
-
-                            override fun onPlayerError(error: PlaybackException) {
-                                Log.e(TAG, "ExoPlayer error: ${error.errorCodeName}: ${error.message}")
-                                playbackErrorType = when (error.errorCode) {
-                                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-                                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-                                        PlaybackErrorType.NETWORK_ERROR
-                                    PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
-                                    PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
-                                    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
-                                        PlaybackErrorType.UNSUPPORTED_FORMAT
-                                    else -> PlaybackErrorType.UNKNOWN
-                                }
-                                errorMessage = playbackErrorType.userMessage
-                                transitionTo(PlaybackState.ERROR, "ExoPlayer error: ${error.errorCodeName}")
-                            }
-                        }
-                        exoPlayer.addListener(listener)
-
-                        onDispose {
-                            Log.d(TAG, "Releasing ExoPlayer")
-                            exoPlayer.removeListener(listener)
-                            exoPlayer.release()
-                            exoPlayerRef = null
                         }
                     }
 
-                    AndroidView(
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                player = exoPlayerRef
-                                useController = false
-                                layoutParams = FrameLayout.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
+                    if (!isAuthPending) {
+                        DisposableEffect(activeVersion.id, bearerToken) {
+                            Log.d(TAG, "Initializing ExoPlayer for version: ${activeVersion.title}")
+                            val mediaUrl = activeVersion.videoUrl.ifBlank { activeVersion.embedUrl }
+
+                            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                                .setUserAgent("KaraokeTV/1.2.4 (Android TV; Media3 ExoPlayer)")
+                                .setConnectTimeoutMs(15000)
+                                .setReadTimeoutMs(30000)
+                                .setAllowCrossProtocolRedirects(true)
+
+                            if (!bearerToken.isNullOrBlank()) {
+                                httpDataSourceFactory.setDefaultRequestProperties(
+                                    mapOf("Authorization" to "Bearer $bearerToken")
                                 )
                             }
-                        },
-                        update = { view ->
-                            view.player = exoPlayerRef
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+
+                            val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+                            val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
+                            val exoPlayer = ExoPlayer.Builder(context)
+                                .setMediaSourceFactory(mediaSourceFactory)
+                                .build().apply {
+                                    val audioAttributes = AudioAttributes.Builder()
+                                        .setUsage(C.USAGE_MEDIA)
+                                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                                        .build()
+                                    setAudioAttributes(audioAttributes, true)
+
+                                    val mediaItem = MediaItem.fromUri(Uri.parse(mediaUrl))
+                                    setMediaItem(mediaItem)
+                                    prepare()
+                                    playWhenReady = true
+                                }
+                            exoPlayerRef = exoPlayer
+
+                            val listener = object : Player.Listener {
+                                override fun onPlaybackStateChanged(state: Int) {
+                                    when (state) {
+                                        Player.STATE_BUFFERING -> {
+                                            Log.d(TAG, "ExoPlayer: STATE_BUFFERING")
+                                            transitionTo(PlaybackState.BUFFERING, "ExoPlayer buffering")
+                                        }
+                                        Player.STATE_READY -> {
+                                            Log.d(TAG, "ExoPlayer: STATE_READY")
+                                            transitionTo(if (exoPlayer.isPlaying) PlaybackState.PLAYING else PlaybackState.PAUSED, "ExoPlayer ready")
+                                        }
+                                        Player.STATE_ENDED -> {
+                                            Log.d(TAG, "ExoPlayer: STATE_ENDED")
+                                            handleSongFinished(false)
+                                        }
+                                        else -> {}
+                                    }
+                                }
+
+                                override fun onIsPlayingChanged(playing: Boolean) {
+                                    if (playing) {
+                                        transitionTo(PlaybackState.PLAYING, "ExoPlayer playing")
+                                    } else if (exoPlayer.playbackState != Player.STATE_ENDED) {
+                                        transitionTo(PlaybackState.PAUSED, "ExoPlayer not playing")
+                                    }
+                                }
+
+                                override fun onPlayerError(error: PlaybackException) {
+                                    Log.e(TAG, "ExoPlayer error: ${error.errorCodeName}: ${error.message} (cause: ${error.cause})")
+
+                                    val httpException = error.cause as? HttpDataSource.InvalidResponseCodeException
+                                    val responseCode = httpException?.responseCode ?: 0
+
+                                    if (responseCode == 401 && activeVersion.source == SourceType.GOOGLE_DRIVE) {
+                                        Log.w(TAG, "ExoPlayer 401 Unauthorized encountered. Refreshing Google Drive token...")
+                                        coroutineScope.launch {
+                                            try {
+                                                val refreshed = getAccessToken?.invoke(true)
+                                                if (!refreshed.isNullOrBlank()) {
+                                                    bearerToken = refreshed
+                                                    return@launch
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e(TAG, "Failed refreshing token after 401: ${e.message}")
+                                            }
+                                            playbackErrorType = PlaybackErrorType.SOURCE_RESTRICTION
+                                            errorMessage = "Сессия Google Drive истекла. Не удалось обновить ключ."
+                                            transitionTo(PlaybackState.ERROR, "HTTP 401 Token expired")
+                                        }
+                                        return
+                                    }
+
+                                    if (responseCode == 403) {
+                                        playbackErrorType = PlaybackErrorType.SOURCE_RESTRICTION
+                                        errorMessage = "Доступ ограничен или квота Google Drive исчерпана"
+                                        transitionTo(PlaybackState.ERROR, "HTTP 403 Quota exceeded")
+                                        return
+                                    }
+
+                                    if (responseCode == 404) {
+                                        playbackErrorType = PlaybackErrorType.VIDEO_NOT_FOUND
+                                        errorMessage = "Файл караоке не найден на Google Диске"
+                                        transitionTo(PlaybackState.ERROR, "HTTP 404 File not found")
+                                        return
+                                    }
+
+                                    playbackErrorType = when (error.errorCode) {
+                                        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                                        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                                            PlaybackErrorType.NETWORK_ERROR
+                                        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+                                        PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+                                        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
+                                            PlaybackErrorType.UNSUPPORTED_FORMAT
+                                        else -> PlaybackErrorType.UNKNOWN
+                                    }
+                                    errorMessage = playbackErrorType.userMessage
+                                    transitionTo(PlaybackState.ERROR, "ExoPlayer error: ${error.errorCodeName}")
+                                }
+                            }
+                            exoPlayer.addListener(listener)
+
+                            onDispose {
+                                Log.d(TAG, "Releasing ExoPlayer")
+                                exoPlayer.removeListener(listener)
+                                exoPlayer.release()
+                                exoPlayerRef = null
+                            }
+                        }
+
+                        AndroidView(
+                            factory = { ctx ->
+                                PlayerView(ctx).apply {
+                                    player = exoPlayerRef
+                                    useController = false
+                                    layoutParams = FrameLayout.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                }
+                            },
+                            update = { view ->
+                                view.player = exoPlayerRef
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
 
                 ActivePlayerType.YOUTUBE_IFRAME -> {
@@ -1061,6 +1181,45 @@ fun PlayerScreen(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = null,
                                     tint = Color.White,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        )
+
+                        TvButton(
+                            text = "-10 сек",
+                            onClick = {
+                                exoPlayerRef?.let { player ->
+                                    val newPos = (player.currentPosition - 10_000L).coerceAtLeast(0L)
+                                    player.seekTo(newPos)
+                                }
+                            },
+                            isPrimary = false,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.FastRewind,
+                                    contentDescription = null,
+                                    tint = SecondaryCyan,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        )
+
+                        TvButton(
+                            text = "+10 сек",
+                            onClick = {
+                                exoPlayerRef?.let { player ->
+                                    val dur = player.duration.coerceAtLeast(0L)
+                                    val newPos = (player.currentPosition + 10_000L).coerceAtMost(dur)
+                                    player.seekTo(newPos)
+                                }
+                            },
+                            isPrimary = false,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.FastForward,
+                                    contentDescription = null,
+                                    tint = SecondaryCyan,
                                     modifier = Modifier.size(28.dp)
                                 )
                             }

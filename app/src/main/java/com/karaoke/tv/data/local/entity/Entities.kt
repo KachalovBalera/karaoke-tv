@@ -17,6 +17,8 @@ data class SongEntity(
     val category: String = "Хиты",
     val timesSung: Int = 0,
     val bestVersionId: String? = null,
+    val normalizedKey: String = "",
+    val searchKeywords: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 

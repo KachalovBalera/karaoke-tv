@@ -35,8 +35,11 @@ class SearchKaraokeUseCase(
         // Record search history
         database.historyDao().insertSearchQuery(SearchHistoryEntity(trimmedQuery))
 
-        // First check local DB for instant offline responsiveness
-        val localEntities = database.songDao().searchSongs(trimmedQuery)
+        // First check local DB for instant offline responsiveness (normalized search)
+        val normalized = com.karaoke.tv.domain.engine.SongFilenameParser.normalize(trimmedQuery)
+        val localEntities = database.songDao().searchSongsNormalized(normalized).ifEmpty {
+            database.songDao().searchSongs(trimmedQuery)
+        }
         val localSongs = localEntities.map { entity ->
             val versions = database.karaokeVersionDao().getVersionsForSong(entity.id).map { it.toDomain() }
             val rankedVersions = rankUseCase.rank(versions, rankingPreferences)
@@ -49,6 +52,15 @@ class SearchKaraokeUseCase(
                 category = entity.category,
                 versions = rankedVersions,
                 bestVersionId = best?.id
+            )
+        }
+
+        // If filtering by GOOGLE_DRIVE or local songs found, return local DB hits immediately
+        if (sourceFilter == SourceType.GOOGLE_DRIVE) {
+            return@withContext SearchResultState(
+                songs = localSongs,
+                errorsBySource = emptyMap(),
+                totalFoundVersions = localSongs.sumOf { it.versions.size }
             )
         }
 

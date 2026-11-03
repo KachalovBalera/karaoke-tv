@@ -205,7 +205,7 @@ fun HomeScreen(
             }
         }
 
-        // 3. "🔥 Популярные караоке RUTUBE" (Popular Karaoke Row)
+        // 3. "🔥 Популярные караоке" (Popular Karaoke Row)
         item {
             Column(
                 modifier = Modifier
@@ -213,7 +213,7 @@ fun HomeScreen(
                     .padding(top = 16.dp, bottom = 8.dp)
             ) {
                 Text(
-                    text = "🔥 Популярные караоке RUTUBE",
+                    text = "🔥 Популярные караоке",
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
@@ -354,7 +354,7 @@ fun TvSearchBarCapsule(
             )
             Spacer(modifier = Modifier.width(16.dp))
             Text(
-                text = "Поиск караоке на RUTUBE...",
+                text = "Поиск караоке...",
                 color = Color(0xFFC4B5FD),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Medium
@@ -467,10 +467,38 @@ data class MockPopularItem(
     val duration: String,
     val songId: String,
     val coverUrl: String,
-    val source: SourceType = SourceType.RUTUBE,
+    val source: SourceType = SourceType.GOOGLE_DRIVE,
     val sourceVideoId: String = ""
 ) {
     fun toSong(): Song {
+        if (source == SourceType.GOOGLE_DRIVE) {
+            val streamingUrl = if (sourceVideoId.isNotBlank()) "https://www.googleapis.com/drive/v3/files/$sourceVideoId?alt=media" else ""
+            val gdriveVer = KaraokeVersion(
+                id = "${songId}_gdrive",
+                songId = songId,
+                source = SourceType.GOOGLE_DRIVE,
+                sourceVideoId = sourceVideoId,
+                title = "$artist — $title",
+                durationSeconds = 240,
+                quality = "MP4 / HD",
+                karaokeScore = 0.99f,
+                thumbnailUrl = coverUrl,
+                videoUrl = streamingUrl,
+                embedUrl = streamingUrl,
+                verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
+                availabilityStatus = PlaybackAvailability.AVAILABLE
+            )
+            return Song(
+                id = songId,
+                title = title,
+                artist = artist,
+                category = "Google Drive",
+                coverUrl = coverUrl,
+                versions = listOf(gdriveVer),
+                bestVersionId = gdriveVer.id
+            )
+        }
+
         val rutubeId = if (sourceVideoId.isNotBlank() && sourceVideoId.length >= 20) {
             sourceVideoId
         } else {
@@ -581,17 +609,26 @@ fun MockKaraokeCard(
                 )
         )
 
-        // RUTUBE Badge (Top Right)
+        // Source / Quality Badge (Top Right)
+        val badgeText = when (item.source) {
+            SourceType.GOOGLE_DRIVE -> "Google Drive"
+            SourceType.RUTUBE -> "RUTUBE"
+            else -> item.source.displayName
+        }
+        val badgeColor = when (item.source) {
+            SourceType.GOOGLE_DRIVE -> Color(0xFF1EA362)
+            else -> Color(0xFF7C3AED)
+        }
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF7C3AED))
+                .background(badgeColor)
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Text(
-                text = "RUTUBE",
+                text = badgeText,
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Black,

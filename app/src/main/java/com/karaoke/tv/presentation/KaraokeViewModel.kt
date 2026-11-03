@@ -37,6 +37,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import android.util.Log
+import com.karaoke.tv.data.remote.gdrive.EncryptedKeyStoreManager
+import com.karaoke.tv.data.remote.gdrive.GoogleDriveRepository
+import com.karaoke.tv.data.remote.gdrive.GoogleDriveSyncManager
+import com.karaoke.tv.data.remote.gdrive.GoogleServiceAccountAuthManager
 import kotlinx.coroutines.withContext
 
 data class UiState(
@@ -58,6 +63,12 @@ data class UiState(
     val latencyOffsetMs: Int = 0,
     val youtubeApiKey: String = "",
     val vkAccessToken: String = "",
+    // Google Drive Sync & Auth State
+    val isGoogleDriveConnected: Boolean = false,
+    val googleDriveAccountEmail: String = "",
+    val totalDriveSongsCount: Int = 0,
+    val isSyncingGoogleDrive: Boolean = false,
+    val syncProgressText: String = "",
     // OTA Update State
     val updateInfo: AppUpdateInfo? = null,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
@@ -68,11 +79,21 @@ data class UiState(
 
 class KaraokeViewModel(application: Application) : AndroidViewModel(application) {
 
+    companion object {
+        private const val TAG = "KaraokeViewModel"
+        const val DEFAULT_GOOGLE_DRIVE_FOLDER_ID = "1c4A8nQFB4lF-QayBn8bELY1X__twQLXC"
+    }
+
     private val db = KaraokeDatabase.getInstance(application)
     val queueRepository: QueueRepository = QueueRepositoryImpl(db)
     val ratingRepository: RatingRepository = RatingRepositoryImpl(db)
     val soundcoreManager = SoundcoreManager(application)
     val updateManager = UpdateManager(application)
+
+    // Google Drive Backend Services
+    val googleAuthManager = GoogleServiceAccountAuthManager()
+    val googleDriveRepo = GoogleDriveRepository(googleAuthManager)
+    val googleSyncManager = GoogleDriveSyncManager(db, googleDriveRepo)
 
     private val prefs = application.getSharedPreferences("karaoke_tv_prefs", Application.MODE_PRIVATE)
 
@@ -92,15 +113,13 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         set(v) = prefs.edit().putInt(SoundcoreManager.PREF_KEY_LATENCY_OFFSET, v).apply()
 
     private var savedSourcePriority: SourceType?
-        get() = SourceType.RUTUBE
+        get() = SourceType.GOOGLE_DRIVE
         set(_) {
-            prefs.edit().putString("preferred_source", SourceType.RUTUBE.name).apply()
+            prefs.edit().putString("preferred_source", SourceType.GOOGLE_DRIVE.name).apply()
         }
 
-    // RUTUBE is the sole active source for searching and playback in v1.1.0
-    private val sources: Map<SourceType, KaraokeSource> = mapOf(
-        SourceType.RUTUBE to RutubeSource()
-    )
+    // Google Drive is the sole active source. Songs are indexed locally into Room.
+    private val sources: Map<SourceType, KaraokeSource> = emptyMap()
 
     val sourceManager = SourceManager(sources)
     val searchUseCase = SearchKaraokeUseCase(sourceManager, db)
@@ -146,13 +165,33 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         initialValue = emptyList()
     )
 
-    private val _popularSongs = MutableStateFlow<List<MockPopularItem>>(
-        CategoryCatalogue.getShuffledPopularKaraoke(6, savedSourcePriority)
-    )
+    private val _popularSongs = MutableStateFlow<List<MockPopularItem>>(emptyList())
     val popularSongs: StateFlow<List<MockPopularItem>> = _popularSongs.asStateFlow()
 
     fun refreshPopularSongs() {
-        _popularSongs.value = CategoryCatalogue.getShuffledPopularKaraoke(6, _uiState.value.sourcePriority)
+        viewModelScope.launch {
+            val dbSongs = withContext(Dispatchers.IO) {
+                db.songDao().getAllSongs().shuffled().take(6)
+            }
+            if (dbSongs.isNotEmpty()) {
+                val items = dbSongs.map { songEntity ->
+                    val versions = db.karaokeVersionDao().getVersionsForSong(songEntity.id)
+                    val bestVer = versions.maxByOrNull { it.quality } ?: versions.firstOrNull()
+                    MockPopularItem(
+                        title = songEntity.title,
+                        artist = songEntity.artist,
+                        duration = "MP4",
+                        songId = songEntity.id,
+                        coverUrl = songEntity.coverUrl,
+                        source = SourceType.GOOGLE_DRIVE,
+                        sourceVideoId = bestVer?.sourceVideoId.orEmpty()
+                    )
+                }
+                _popularSongs.value = items
+            } else {
+                _popularSongs.value = CategoryCatalogue.getShuffledPopularKaraoke(6, SourceType.GOOGLE_DRIVE)
+            }
+        }
     }
 
     init {
@@ -160,6 +199,84 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         refreshAudioStatus()
         loadSearchHistory()
         checkForUpdates(isAutoCheck = true)
+        viewModelScope.launch {
+            checkAndInitializeGoogleDrive()
+        }
+    }
+
+    private suspend fun checkAndInitializeGoogleDrive() {
+        val hasCreds = withContext(Dispatchers.IO) {
+            googleAuthManager.tryAutoLoadCredentials(getApplication())
+        }
+        val count = withContext(Dispatchers.IO) {
+            db.songDao().getSongCount()
+        }
+        _uiState.value = _uiState.value.copy(
+            isGoogleDriveConnected = hasCreds,
+            googleDriveAccountEmail = googleAuthManager.clientEmail.orEmpty(),
+            totalDriveSongsCount = count
+        )
+        refreshPopularSongs()
+        if (hasCreds && count == 0) {
+            Log.i(TAG, "Google Drive credentials found, but Room catalog is empty. Auto-starting initial sync...")
+            syncGoogleDrive(DEFAULT_GOOGLE_DRIVE_FOLDER_ID)
+        }
+    }
+
+    fun syncGoogleDrive(folderId: String = DEFAULT_GOOGLE_DRIVE_FOLDER_ID) {
+        if (_uiState.value.isSyncingGoogleDrive) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isSyncingGoogleDrive = true,
+                syncProgressText = "Подключение к Google Диску..."
+            )
+            try {
+                if (!googleAuthManager.hasCredentials()) {
+                    withContext(Dispatchers.IO) {
+                        googleAuthManager.tryAutoLoadCredentials(getApplication())
+                    }
+                }
+                val result = googleSyncManager.syncFolder(folderId) { progress ->
+                    _uiState.value = _uiState.value.copy(
+                        syncProgressText = "Страница ${progress.currentPage} (${progress.totalScannedFiles} файлов)..."
+                    )
+                }
+                val count = withContext(Dispatchers.IO) {
+                    db.songDao().getSongCount()
+                }
+                _uiState.value = _uiState.value.copy(
+                    isSyncingGoogleDrive = false,
+                    syncProgressText = "Синхронизировано ${result.totalUniqueSongs} песен (${result.totalVersions} версий)",
+                    totalDriveSongsCount = count,
+                    isGoogleDriveConnected = true,
+                    googleDriveAccountEmail = googleAuthManager.clientEmail.orEmpty()
+                )
+                refreshPopularSongs()
+            } catch (e: Exception) {
+                Log.e(TAG, "Google Drive sync error: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(
+                    isSyncingGoogleDrive = false,
+                    syncProgressText = "Ошибка синхронизации: ${e.localizedMessage ?: "Сбой соединения"}"
+                )
+            }
+        }
+    }
+
+    fun deleteGoogleDriveCredentials() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                EncryptedKeyStoreManager.deleteCredentials(getApplication())
+            }
+            _uiState.value = _uiState.value.copy(
+                isGoogleDriveConnected = false,
+                googleDriveAccountEmail = "",
+                syncProgressText = "Ключ удален из Keystore"
+            )
+        }
+    }
+
+    suspend fun getGoogleDriveAccessToken(forceRefresh: Boolean = false): String {
+        return googleAuthManager.getAccessToken(forceRefresh)
     }
 
     override fun onCleared() {
@@ -185,8 +302,8 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
             val result = withContext(Dispatchers.IO) {
                 searchUseCase.execute(
                     query = query,
-                    sourceFilter = SourceType.RUTUBE,
-                    rankingPreferences = RankingPreferences(preferredSource = SourceType.RUTUBE)
+                    sourceFilter = SourceType.GOOGLE_DRIVE,
+                    rankingPreferences = RankingPreferences(preferredSource = SourceType.GOOGLE_DRIVE)
                 )
             }
             _uiState.value = _uiState.value.copy(
@@ -258,34 +375,36 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
     fun playSongVersion(song: Song, version: KaraokeVersion, participantName: String = "Гость") {
         viewModelScope.launch {
             var effectiveVersion = version
-            if (effectiveVersion.source != SourceType.RUTUBE) {
-                val rutubeVer = song.versions.firstOrNull { it.source == SourceType.RUTUBE }
-                if (rutubeVer != null) {
-                    effectiveVersion = rutubeVer
+            if (effectiveVersion.source != SourceType.GOOGLE_DRIVE && effectiveVersion.source != SourceType.RUTUBE) {
+                val gdriveVer = song.versions.firstOrNull { it.source == SourceType.GOOGLE_DRIVE }
+                if (gdriveVer != null) {
+                    effectiveVersion = gdriveVer
                 }
             }
-            val rawId = effectiveVersion.sourceVideoId.removePrefix("rutube_").trim()
-            if (isCataloguePlaceholder(rawId) || rawId.length < 20) {
-                val resolvedRutubeId = CategoryCatalogue.resolveRutubeId(song.artist, song.title)
-                if (!resolvedRutubeId.isNullOrBlank()) {
-                    val realThumbnail = CategoryCatalogue.resolveRutubeThumbnail(song.artist, song.title)
-                    effectiveVersion = effectiveVersion.copy(
-                        source = SourceType.RUTUBE,
-                        sourceVideoId = resolvedRutubeId,
-                        thumbnailUrl = realThumbnail.ifBlank { effectiveVersion.thumbnailUrl },
-                        embedUrl = "https://rutube.ru/play/embed/$resolvedRutubeId",
-                        videoUrl = "https://rutube.ru/video/$resolvedRutubeId/"
-                    )
-                } else {
-                    // Dynamic live search on RUTUBE to resolve real video ID
-                    val searchResult = withContext(Dispatchers.IO) {
-                        searchUseCase.execute("${song.artist} ${song.title} караоке", sourceFilter = SourceType.RUTUBE)
-                    }
-                    val foundVer = searchResult.songs.firstOrNull()?.versions?.firstOrNull {
-                        it.source == SourceType.RUTUBE && it.sourceVideoId.isNotBlank() && it.sourceVideoId.length >= 20
-                    }
-                    if (foundVer != null) {
-                        effectiveVersion = foundVer
+            if (effectiveVersion.source == SourceType.RUTUBE) {
+                val rawId = effectiveVersion.sourceVideoId.removePrefix("rutube_").trim()
+                if (isCataloguePlaceholder(rawId) || rawId.length < 20) {
+                    val resolvedRutubeId = CategoryCatalogue.resolveRutubeId(song.artist, song.title)
+                    if (!resolvedRutubeId.isNullOrBlank()) {
+                        val realThumbnail = CategoryCatalogue.resolveRutubeThumbnail(song.artist, song.title)
+                        effectiveVersion = effectiveVersion.copy(
+                            source = SourceType.RUTUBE,
+                            sourceVideoId = resolvedRutubeId,
+                            thumbnailUrl = realThumbnail.ifBlank { effectiveVersion.thumbnailUrl },
+                            embedUrl = "https://rutube.ru/play/embed/$resolvedRutubeId",
+                            videoUrl = "https://rutube.ru/video/$resolvedRutubeId/"
+                        )
+                    } else {
+                        // Dynamic live search on RUTUBE to resolve real video ID
+                        val searchResult = withContext(Dispatchers.IO) {
+                            searchUseCase.execute("${song.artist} ${song.title} караоке", sourceFilter = SourceType.RUTUBE)
+                        }
+                        val foundVer = searchResult.songs.firstOrNull()?.versions?.firstOrNull {
+                            it.source == SourceType.RUTUBE && it.sourceVideoId.isNotBlank() && it.sourceVideoId.length >= 20
+                        }
+                        if (foundVer != null) {
+                            effectiveVersion = foundVer
+                        }
                     }
                 }
             }
@@ -330,34 +449,36 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
     fun addToQueue(song: Song, version: KaraokeVersion, participantName: String = "Гость") {
         viewModelScope.launch {
             var effectiveVersion = version
-            if (effectiveVersion.source != SourceType.RUTUBE) {
-                val rutubeVer = song.versions.firstOrNull { it.source == SourceType.RUTUBE }
-                if (rutubeVer != null) {
-                    effectiveVersion = rutubeVer
+            if (effectiveVersion.source != SourceType.GOOGLE_DRIVE && effectiveVersion.source != SourceType.RUTUBE) {
+                val gdriveVer = song.versions.firstOrNull { it.source == SourceType.GOOGLE_DRIVE }
+                if (gdriveVer != null) {
+                    effectiveVersion = gdriveVer
                 }
             }
-            val rawId = effectiveVersion.sourceVideoId.removePrefix("rutube_").trim()
-            if (isCataloguePlaceholder(rawId) || rawId.length < 20) {
-                val resolvedRutubeId = CategoryCatalogue.resolveRutubeId(song.artist, song.title)
-                if (!resolvedRutubeId.isNullOrBlank()) {
-                    val realThumbnail = CategoryCatalogue.resolveRutubeThumbnail(song.artist, song.title)
-                    effectiveVersion = effectiveVersion.copy(
-                        source = SourceType.RUTUBE,
-                        sourceVideoId = resolvedRutubeId,
-                        thumbnailUrl = realThumbnail.ifBlank { effectiveVersion.thumbnailUrl },
-                        embedUrl = "https://rutube.ru/play/embed/$resolvedRutubeId",
-                        videoUrl = "https://rutube.ru/video/$resolvedRutubeId/"
-                    )
-                } else {
-                    // Dynamic live search on RUTUBE to resolve real video ID
-                    val searchResult = withContext(Dispatchers.IO) {
-                        searchUseCase.execute("${song.artist} ${song.title} караоке", sourceFilter = SourceType.RUTUBE)
-                    }
-                    val foundVer = searchResult.songs.firstOrNull()?.versions?.firstOrNull {
-                        it.source == SourceType.RUTUBE && it.sourceVideoId.isNotBlank() && it.sourceVideoId.length >= 20
-                    }
-                    if (foundVer != null) {
-                        effectiveVersion = foundVer
+            if (effectiveVersion.source == SourceType.RUTUBE) {
+                val rawId = effectiveVersion.sourceVideoId.removePrefix("rutube_").trim()
+                if (isCataloguePlaceholder(rawId) || rawId.length < 20) {
+                    val resolvedRutubeId = CategoryCatalogue.resolveRutubeId(song.artist, song.title)
+                    if (!resolvedRutubeId.isNullOrBlank()) {
+                        val realThumbnail = CategoryCatalogue.resolveRutubeThumbnail(song.artist, song.title)
+                        effectiveVersion = effectiveVersion.copy(
+                            source = SourceType.RUTUBE,
+                            sourceVideoId = resolvedRutubeId,
+                            thumbnailUrl = realThumbnail.ifBlank { effectiveVersion.thumbnailUrl },
+                            embedUrl = "https://rutube.ru/play/embed/$resolvedRutubeId",
+                            videoUrl = "https://rutube.ru/video/$resolvedRutubeId/"
+                        )
+                    } else {
+                        // Dynamic live search on RUTUBE to resolve real video ID
+                        val searchResult = withContext(Dispatchers.IO) {
+                            searchUseCase.execute("${song.artist} ${song.title} караоке", sourceFilter = SourceType.RUTUBE)
+                        }
+                        val foundVer = searchResult.songs.firstOrNull()?.versions?.firstOrNull {
+                            it.source == SourceType.RUTUBE && it.sourceVideoId.isNotBlank() && it.sourceVideoId.length >= 20
+                        }
+                        if (foundVer != null) {
+                            effectiveVersion = foundVer
+                        }
                     }
                 }
             }
@@ -406,7 +527,7 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
             if (next != null) {
                 var effectiveNext = next
                 val ver = effectiveNext.selectedVersion
-                if (ver != null) {
+                if (ver != null && ver.source == SourceType.RUTUBE) {
                     val rawId = ver.sourceVideoId.removePrefix("rutube_").trim()
                     if (isCataloguePlaceholder(rawId) || rawId.length < 20) {
                         val resolvedRutubeId = CategoryCatalogue.resolveRutubeId(effectiveNext.songArtist, effectiveNext.songTitle)

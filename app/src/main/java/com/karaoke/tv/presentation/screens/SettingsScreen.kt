@@ -85,7 +85,15 @@ fun SettingsScreen(
     customManifestUrl: String,
     onCustomManifestUrlChange: (String) -> Unit,
     onCheckForUpdates: () -> Unit,
-    onOpenUpdateDialog: () -> Unit
+    onOpenUpdateDialog: () -> Unit,
+    // Google Drive Props
+    isGoogleDriveConnected: Boolean = false,
+    googleDriveAccountEmail: String = "",
+    totalDriveSongsCount: Int = 0,
+    isSyncingGoogleDrive: Boolean = false,
+    syncProgressText: String = "",
+    onSyncGoogleDrive: () -> Unit = {},
+    onDeleteGoogleDriveKey: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -109,13 +117,13 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Karaoke TV v1.1.0 — RUTUBE Edition: единый каталог караоке с текстом",
+                text = "Karaoke TV v1.2.4 — Google Drive Edition: персональная коллекция караоке",
                 color = TextSecondary,
                 fontSize = 17.sp
             )
         }
 
-        // Section: Active Video Source (RUTUBE Exclusive)
+        // Section: Active Video Source (Google Drive Exclusive)
         item {
             Box(
                 modifier = Modifier
@@ -125,50 +133,127 @@ fun SettingsScreen(
                     .padding(24.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Api,
-                            contentDescription = null,
-                            tint = NeonCyan,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "ЕДИНЫЙ ИСТОЧНИК ВИДЕО — RUTUBE",
-                            color = TextPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "ЕДИНЫЙ ИСТОЧНИК КАРАОКЕ — GOOGLE ДИСК",
+                                color = TextPrimary,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        if (isSyncingGoogleDrive) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    color = NeonCyan,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Синхронизация...",
+                                    color = NeonCyan,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
 
                     Text(
-                        text = "В версии v1.1.0 поиск и воспроизведение караоке полностью переведены на RUTUBE. Это обеспечивает максимальную стабильность в РФ, встроенные субтитры/текст и непрерывное воспроизведение без рекламных пауз.",
+                        text = "Воспроизведение личной коллекции караоке в формате MP4 напрямую с Google Диска через аппаратный декодер Media3 ExoPlayer с поддержкой HTTP Range 206 (быстрая перемотка без буферизации).",
                         color = TextSecondary,
                         fontSize = 16.sp,
                         lineHeight = 22.sp
                     )
 
+                    // Connection status badge
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF0F2238))
-                            .border(1.5.dp, NeonCyan.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                            .background(if (isGoogleDriveConnected) Color(0xFF0F2B1F) else Color(0xFF2E2210))
+                            .border(
+                                1.5.dp,
+                                if (isGoogleDriveConnected) SuccessGreen.copy(alpha = 0.7f) else GoldStar.copy(alpha = 0.7f),
+                                RoundedCornerShape(10.dp)
+                            )
                             .padding(16.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.CheckCircle,
+                                imageVector = if (isGoogleDriveConnected) Icons.Default.CheckCircle else Icons.Default.Key,
                                 contentDescription = null,
-                                tint = SuccessGreen,
+                                tint = if (isGoogleDriveConnected) SuccessGreen else GoldStar,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "RUTUBE активен и работает без API-ключей, авторизации и ограничений скорости.",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
+                            Column {
+                                Text(
+                                    text = if (isGoogleDriveConnected) {
+                                        "Google Service Account: $googleDriveAccountEmail"
+                                    } else {
+                                        "Ключ Google Drive не найден в Keystore. Загрузите ключ через ADB."
+                                    },
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "В каталоге песен: $totalDriveSongsCount" +
+                                            if (syncProgressText.isNotBlank()) " • $syncProgressText" else "",
+                                    color = if (isGoogleDriveConnected) NeonCyan else TextMuted,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Action buttons: Sync and Key management
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        TvButton(
+                            text = if (isSyncingGoogleDrive) "Синхронизация..." else "Синхронизировать Google Диск",
+                            onClick = onSyncGoogleDrive,
+                            isPrimary = true,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        )
+
+                        if (isGoogleDriveConnected) {
+                            TvButton(
+                                text = "Удалить ключ Google Drive",
+                                onClick = onDeleteGoogleDriveKey,
+                                isPrimary = false,
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteSweep,
+                                        contentDescription = null,
+                                        tint = AccentPink,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             )
                         }
                     }

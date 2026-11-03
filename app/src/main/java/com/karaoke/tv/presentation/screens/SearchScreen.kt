@@ -84,7 +84,7 @@ fun SearchScreen(
     ) {
         // Search Header
         Text(
-            text = "ПОИСК КАРАОКЕ RUTUBE",
+            text = "ПОИСК КАРАОКЕ",
             color = PrimaryPurple,
             fontSize = 32.sp,
             fontWeight = FontWeight.Black,
@@ -197,13 +197,13 @@ fun SearchScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // RUTUBE Source Status Banner
+        // Active Source Status Banner
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "⭐ Источник поиска: RUTUBE Караоке с текстом (Full HD)",
+                text = "⭐ Источник поиска: Google Диск (коллекция караоке MP4)",
                 color = SecondaryCyan,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold

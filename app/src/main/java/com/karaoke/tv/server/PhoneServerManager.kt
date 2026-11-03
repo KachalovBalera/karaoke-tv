@@ -219,17 +219,33 @@ class PhoneServerManager(
                 }
 
                 uriPath == "/api/popular" && method == "GET" -> {
-                    val popular = CategoryCatalogue.getShuffledPopularKaraoke(8)
+                    val dbSongs = db?.songDao()?.getAllSongs()?.shuffled()?.take(8) ?: emptyList()
                     val array = JSONArray()
-                    for (item in popular) {
-                        array.put(JSONObject().apply {
-                            put("id", item.songId)
-                            put("title", item.title)
-                            put("artist", item.artist)
-                            put("duration", item.duration)
-                            put("coverUrl", item.coverUrl)
-                            put("versionId", item.sourceVideoId)
-                        })
+                    if (dbSongs.isNotEmpty()) {
+                        for (item in dbSongs) {
+                            val versions = db?.karaokeVersionDao()?.getVersionsForSong(item.id)
+                            val bestVer = versions?.firstOrNull()
+                            array.put(JSONObject().apply {
+                                put("id", item.id)
+                                put("title", item.title)
+                                put("artist", item.artist)
+                                put("duration", "MP4")
+                                put("coverUrl", item.coverUrl)
+                                put("versionId", bestVer?.sourceVideoId ?: "")
+                            })
+                        }
+                    } else {
+                        val popular = CategoryCatalogue.getShuffledPopularKaraoke(8, SourceType.GOOGLE_DRIVE)
+                        for (item in popular) {
+                            array.put(JSONObject().apply {
+                                put("id", item.songId)
+                                put("title", item.title)
+                                put("artist", item.artist)
+                                put("duration", item.duration)
+                                put("coverUrl", item.coverUrl)
+                                put("versionId", item.sourceVideoId)
+                            })
+                        }
                     }
                     sendResponse(output, 200, "application/json", array.toString())
                 }
@@ -238,12 +254,11 @@ class PhoneServerManager(
                     val historyList = db?.historyDao()?.getRecentHistory(10)?.firstOrNull() ?: emptyList()
                     val array = JSONArray()
                     for (h in historyList) {
-                        val thumb = CategoryCatalogue.resolveRutubeThumbnail(h.artist, h.title)
                         array.put(JSONObject().apply {
                             put("id", h.songId)
                             put("title", h.title)
                             put("artist", h.artist)
-                            put("coverUrl", thumb)
+                            put("coverUrl", "")
                             put("versionId", h.versionId)
                         })
                     }
@@ -252,7 +267,7 @@ class PhoneServerManager(
 
                 uriPath == "/api/search" && method == "GET" -> {
                     val q = queryParams["q"] ?: ""
-                    val result = searchUseCase.execute(q, SourceType.RUTUBE)
+                    val result = searchUseCase.execute(q, SourceType.GOOGLE_DRIVE)
                     val jsonArray = JSONArray()
                     for (song in result.songs) {
                         val songObj = JSONObject().apply {
@@ -263,7 +278,7 @@ class PhoneServerManager(
                             val versionsArray = JSONArray()
                             for (v in song.versions) {
                                 versionsArray.put(JSONObject().apply {
-                                    put("id", v.sourceVideoId.removePrefix("rutube_").trim())
+                                    put("id", v.id)
                                     put("title", v.title)
                                     put("thumbnailUrl", v.thumbnailUrl)
                                     put("duration", v.durationFormatted)
@@ -287,41 +302,79 @@ class PhoneServerManager(
                     val coverUrl = json.optString("coverUrl")
                     val participant = json.optString("participantName", "Гость").ifBlank { "Гость" }
 
-                    var cleanVideoId = versionId.removePrefix("rutube_").trim()
-                    var realThumb = coverUrl
-                    if (cleanVideoId.length < 20) {
-                        val resolved = CategoryCatalogue.resolveRutubeId(songArtist, songTitle)
-                        if (!resolved.isNullOrBlank()) {
-                            cleanVideoId = resolved
-                            realThumb = CategoryCatalogue.resolveRutubeThumbnail(songArtist, songTitle)
-                        }
-                    }
-                    if (realThumb.isBlank()) {
-                        realThumb = CategoryCatalogue.resolveRutubeThumbnail(songArtist, songTitle)
-                    }
+                    // Check if song exists in Room database
+                    val dbSong = db?.songDao()?.getSongById(songId)
+                    val dbVersion = if (versionId.isNotBlank()) {
+                        db?.karaokeVersionDao()?.getVersionById(versionId)
+                    } else null
 
-                    val dummySong = Song(
-                        id = songId.ifBlank { "song_${System.currentTimeMillis()}" },
-                        title = songTitle,
-                        artist = songArtist,
-                        coverUrl = realThumb
-                    )
-                    val version = KaraokeVersion(
-                        id = "rutube_$cleanVideoId",
-                        songId = dummySong.id,
-                        source = SourceType.RUTUBE,
-                        sourceVideoId = cleanVideoId,
-                        title = "$songArtist — $songTitle (Караоке RUTUBE)",
-                        thumbnailUrl = realThumb,
-                        videoUrl = "https://rutube.ru/video/$cleanVideoId/",
-                        embedUrl = "https://rutube.ru/play/embed/$cleanVideoId",
-                        quality = "1080p",
-                        karaokeScore = 0.98f,
-                        isEmbeddable = true,
-                        verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
-                        availabilityStatus = PlaybackAvailability.AVAILABLE
-                    )
-                    queueRepository.addToQueue(dummySong, version, participant)
+                    if (dbSong != null) {
+                        val verEntity = dbVersion ?: db?.karaokeVersionDao()?.getVersionsForSong(dbSong.id)?.firstOrNull()
+                        val domainVer = verEntity?.let {
+                            KaraokeVersion(
+                                id = it.id,
+                                songId = it.songId,
+                                source = it.source,
+                                sourceVideoId = it.sourceVideoId,
+                                title = it.title,
+                                channelOrAuthor = it.channelOrAuthor,
+                                thumbnailUrl = it.thumbnailUrl,
+                                durationSeconds = it.durationSeconds,
+                                videoUrl = it.videoUrl,
+                                embedUrl = it.embedUrl,
+                                quality = it.quality,
+                                karaokeScore = it.karaokeScore,
+                                userRatingAverage = it.userRatingAverage,
+                                ratingCount = it.ratingCount,
+                                isEmbeddable = it.isEmbeddable,
+                                verificationStatus = it.verificationStatus,
+                                availabilityStatus = it.availabilityStatus
+                            )
+                        } ?: KaraokeVersion(
+                            id = "gdrive_${dbSong.id}",
+                            songId = dbSong.id,
+                            source = SourceType.GOOGLE_DRIVE,
+                            sourceVideoId = "",
+                            title = "${dbSong.artist} — ${dbSong.title}",
+                            videoUrl = ""
+                        )
+                        val domainSong = Song(
+                            id = dbSong.id,
+                            title = dbSong.title,
+                            artist = dbSong.artist,
+                            coverUrl = dbSong.coverUrl,
+                            category = dbSong.category,
+                            versions = listOf(domainVer),
+                            bestVersionId = domainVer.id
+                        )
+                        queueRepository.addToQueue(domainSong, domainVer, participant)
+                    } else {
+                        // Fallback: create Google Drive queue item
+                        val cleanVideoId = versionId.removePrefix("gdrive_ver_").removePrefix("gdrive_").removePrefix("rutube_").trim()
+                        val mediaUrl = if (cleanVideoId.isNotBlank()) "https://www.googleapis.com/drive/v3/files/$cleanVideoId?alt=media" else ""
+                        val dummySong = Song(
+                            id = songId.ifBlank { "song_${System.currentTimeMillis()}" },
+                            title = songTitle,
+                            artist = songArtist,
+                            coverUrl = coverUrl
+                        )
+                        val version = KaraokeVersion(
+                            id = "gdrive_ver_$cleanVideoId",
+                            songId = dummySong.id,
+                            source = SourceType.GOOGLE_DRIVE,
+                            sourceVideoId = cleanVideoId,
+                            title = "$songArtist — $songTitle (Google Drive)",
+                            thumbnailUrl = coverUrl,
+                            videoUrl = mediaUrl,
+                            embedUrl = mediaUrl,
+                            quality = "MP4 / HD",
+                            karaokeScore = 0.99f,
+                            isEmbeddable = true,
+                            verificationStatus = VerificationStatus.VERIFIED_KARAOKE,
+                            availabilityStatus = PlaybackAvailability.AVAILABLE
+                        )
+                        queueRepository.addToQueue(dummySong, version, participant)
+                    }
                     sendResponse(output, 200, "application/json", """{"status":"ok"}""")
                 }
 

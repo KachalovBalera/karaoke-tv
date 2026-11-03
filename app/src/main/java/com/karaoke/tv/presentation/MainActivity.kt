@@ -264,7 +264,14 @@ class MainActivity : ComponentActivity() {
                                     customManifestUrl = uiState.customManifestUrl,
                                     onCustomManifestUrlChange = { viewModel.updateCustomManifestUrl(it) },
                                     onCheckForUpdates = { viewModel.checkForUpdates(isAutoCheck = false) },
-                                    onOpenUpdateDialog = { viewModel.openUpdateDialogManually() }
+                                    onOpenUpdateDialog = { viewModel.openUpdateDialogManually() },
+                                    isGoogleDriveConnected = uiState.isGoogleDriveConnected,
+                                    googleDriveAccountEmail = uiState.googleDriveAccountEmail,
+                                    totalDriveSongsCount = uiState.totalDriveSongsCount,
+                                    isSyncingGoogleDrive = uiState.isSyncingGoogleDrive,
+                                    syncProgressText = uiState.syncProgressText,
+                                    onSyncGoogleDrive = { viewModel.syncGoogleDrive() },
+                                    onDeleteGoogleDriveKey = { viewModel.deleteGoogleDriveCredentials() }
                                 )
 
                                 // 7: Soundcore Rave 3S Setup & Calibration Screen
@@ -326,6 +333,7 @@ class MainActivity : ComponentActivity() {
                                 currentQueueItem = uiState.activePlayingItem!!,
                                 queueList = queue,
                                 alternativeVersions = emptyList(),
+                                getAccessToken = { forceRefresh -> viewModel.getGoogleDriveAccessToken(forceRefresh) },
                                 onSongEnded = { viewModel.onSongEnded() },
                                 onSkipNext = { viewModel.skipCurrentSong() },
                                 onSwitchVersion = { viewModel.switchActiveVersion(it) },

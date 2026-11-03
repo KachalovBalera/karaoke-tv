@@ -321,6 +321,7 @@ fun SourceBadge(
     modifier: Modifier = Modifier
 ) {
     val (bgColor, textColor) = when (source) {
+        SourceType.GOOGLE_DRIVE -> Color(0xFF1EA362) to Color.White
         SourceType.YOUTUBE -> Color(0xFFCC0000) to Color.White
         SourceType.VK -> Color(0xFF0077FF) to Color.White
         SourceType.RUTUBE -> Color(0xFF00A82D) to Color.White
