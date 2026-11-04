@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -180,6 +181,10 @@ class MainActivity : ComponentActivity() {
                             queueCount = queue.size,
                             connectedPhonesCount = connectedPhonesCount,
                             onSelectIndex = { viewModel.selectNavIndex(it) },
+                            onExitApp = {
+                                viewModel.closePlayer(removeFromQueue = false)
+                                finishAffinity()
+                            },
                             contentFocusRequester = contentFocusRequester
                         )
 
@@ -548,6 +553,7 @@ fun TvSidebarNavigation(
     queueCount: Int,
     connectedPhonesCount: Int = 0,
     onSelectIndex: (Int) -> Unit,
+    onExitApp: () -> Unit,
     contentFocusRequester: FocusRequester
 ) {
     val navItems = listOf(
@@ -558,7 +564,8 @@ fun TvSidebarNavigation(
         NavItem("История", Icons.Default.History, 4),
         NavItem("Рейтинг", Icons.Default.EmojiEvents, 5),
         NavItem("Телефон", Icons.Default.Smartphone, 8),
-        NavItem("Настройки", Icons.Default.Settings, 6)
+        NavItem("Настройки", Icons.Default.Settings, 6),
+        NavItem("Выход", Icons.AutoMirrored.Filled.ExitToApp, -1)
     )
 
     Column(
@@ -567,13 +574,13 @@ fun TvSidebarNavigation(
             .fillMaxHeight()
             .background(Color(0xDD070A18))
             .border(width = 1.dp, color = Color(0x3338BDF8))
-            .padding(vertical = 16.dp, horizontal = 14.dp)
+            .padding(vertical = 12.dp, horizontal = 14.dp)
     ) {
         // App Logo Header with neon microphone graphic & slogan
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 8.dp)
+                .padding(horizontal = 6.dp, vertical = 4.dp)
         ) {
             Image(
                 painter = painterResource(id = R.drawable.app_logo),
@@ -581,25 +588,29 @@ fun TvSidebarNavigation(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(50.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Navigation Items
         navItems.forEach { item ->
-            val isSelected = selectedIndex == item.targetIndex
+            val isExit = item.targetIndex == -1
+            val isSelected = !isExit && selectedIndex == item.targetIndex
             val interactionSource = remember { MutableInteractionSource() }
             val isFocused by interactionSource.collectIsFocusedAsState()
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(52.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(
                         when {
+                            isExit && isFocused -> Brush.horizontalGradient(
+                                colors = listOf(Color(0xFFDC2626), Color(0xFF991B1B))
+                            )
                             isSelected && isFocused -> Brush.horizontalGradient(
                                 colors = listOf(Color(0xFF2563EB), Color(0xFF7C3AED))
                             )
@@ -621,6 +632,7 @@ fun TvSidebarNavigation(
                             else -> 0.dp
                         },
                         color = when {
+                            isExit && isFocused -> Color(0xFFEF4444)
                             isFocused -> SecondaryCyan
                             isSelected -> Color(0xFF60A5FA)
                             else -> Color.Transparent
@@ -632,7 +644,9 @@ fun TvSidebarNavigation(
                     }
                     .focusable(interactionSource = interactionSource)
                     .clickable(interactionSource = interactionSource, indication = null) {
-                        if (isSelected) {
+                        if (isExit) {
+                            onExitApp()
+                        } else if (isSelected) {
                             contentFocusRequester.requestFocus()
                         } else {
                             onSelectIndex(item.targetIndex)
@@ -645,11 +659,13 @@ fun TvSidebarNavigation(
                     imageVector = item.icon,
                     contentDescription = item.label,
                     tint = when {
+                        isExit && isFocused -> Color.White
+                        isExit -> Color(0xFFF87171)
                         isFocused -> Color.White
                         isSelected -> Color.White
                         else -> Color(0xFF94A3B8)
                     },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
 
                 Spacer(modifier = Modifier.width(14.dp))
@@ -657,12 +673,14 @@ fun TvSidebarNavigation(
                 Text(
                     text = item.label,
                     color = when {
+                        isExit && isFocused -> Color.White
+                        isExit -> Color(0xFFFCA5A5)
                         isFocused -> Color.White
                         isSelected -> Color.White
                         else -> Color(0xFFCBD5E1)
                     },
                     fontSize = 20.sp,
-                    fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.SemiBold
+                    fontWeight = if (isSelected || isFocused || isExit) FontWeight.Bold else FontWeight.SemiBold
                 )
 
                 // Circular Counter Badge for "Очередь" (White circle with bold black text)
@@ -706,7 +724,7 @@ fun TvSidebarNavigation(
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }
