@@ -99,7 +99,19 @@ class GoogleServiceAccountAuthManager(
             }.getOrDefault(false)
         }
 
-        // 2. Check staging file pushed via ADB
+        // 2. Embedded credentials asset (enables running out-of-the-box on new devices / TVs)
+        val embeddedJson = EmbeddedCredentialsManager.loadEmbeddedCredentials(context)
+        if (!embeddedJson.isNullOrBlank()) {
+            return runCatching {
+                loadCredentialsFromJson(embeddedJson)
+                // Persist securely to device hardware KeyStore so future boots use KeyStore
+                EncryptedKeyStoreManager.saveEncryptedCredentials(context, embeddedJson)
+                Log.i(TAG, "Successfully initialized from embedded credentials and secured in Keystore")
+                true
+            }.getOrDefault(false)
+        }
+
+        // 3. Check staging file pushed via ADB
         val imported = EncryptedKeyStoreManager.checkAndImportFromStaging(context)
         if (imported) {
             val newlyEncryptedJson = EncryptedKeyStoreManager.loadDecryptedCredentials(context)
