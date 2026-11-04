@@ -243,7 +243,7 @@ fun SearchScreen(
                                 onClearSuggestions()
                                 onSongSelected(song)
                             }
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -255,23 +255,23 @@ fun SearchScreen(
                                 imageVector = Icons.Default.MusicNote,
                                 contentDescription = null,
                                 tint = if (sFocused) PrimaryPurpleGlow else SecondaryCyan,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(26.dp)
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
                             Text(
                                 text = song.title,
                                 color = TextPrimary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "—  ${song.artist}",
                                 color = if (sFocused) Color.White else SecondaryCyan,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Normal,
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -281,8 +281,8 @@ fun SearchScreen(
                         Text(
                             text = quality,
                             color = TextMuted,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

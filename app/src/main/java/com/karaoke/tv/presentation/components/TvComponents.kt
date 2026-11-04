@@ -149,23 +149,23 @@ fun TvSongCard(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
             Text(
                 text = song.title,
                 color = Color.White,
-                fontSize = 18.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Black,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 22.sp
+                lineHeight = 28.sp
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = song.artist,
                 color = SecondaryCyan,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -248,29 +248,30 @@ fun TvVersionItem(
             Text(
                 text = version.title,
                 color = TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
                 Text(
                     text = "Автор: ${version.channelOrAuthor}",
-                    color = TextSecondary,
-                    fontSize = 12.sp
+                    color = SecondaryCyan,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "•  ${version.durationFormatted}",
                     color = TextMuted,
-                    fontSize = 12.sp
+                    fontSize = 14.sp
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "•  ${version.quality}",
                     color = SecondaryCyan,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
             }

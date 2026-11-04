@@ -166,14 +166,14 @@ private fun CategorySongCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(16f / 9.5f)
+            .aspectRatio(16f / 10f)
             .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(Color(0xFF131122))
             .border(
-                width = if (isFocused) 2.5.dp else 1.dp,
+                width = if (isFocused) 3.5.dp else 1.dp,
                 color = if (isFocused) NeonCyan else Color(0xFF26203D),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(14.dp)
             )
             .focusable(interactionSource = interactionSource)
             .combinedClickable(
@@ -183,7 +183,7 @@ private fun CategorySongCard(
                 onLongClick = onLongClick
             )
     ) {
-        // Real source cover thumbnail via AsyncImage (No artificial backgrounds)
+        // Concert stage background or real cover thumbnail
         if (song.coverUrl.isNotBlank()) {
             AsyncImage(
                 model = song.coverUrl,
@@ -192,33 +192,27 @@ private fun CategorySongCard(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF1A162B)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = SecondaryCyan.copy(alpha = 0.6f),
-                    modifier = Modifier.size(36.dp)
-                )
-            }
+            Image(
+                painter = painterResource(id = R.drawable.card_concert_bg),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
-        // Scrim gradient
+        // High-contrast vertical gradient overlay for maximum readability
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Transparent,
-                            Color(0x66000000),
-                            Color(0xDD000000)
+                            Color(0x33000000),
+                            Color(0x77070A18),
+                            Color(0xEE070A18),
+                            Color(0xFC070A18)
                         ),
-                        startY = 30f
+                        startY = 10f
                     )
                 )
         )
@@ -227,53 +221,46 @@ private fun CategorySongCard(
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(6.dp)
+                .padding(8.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(PrimaryPurple)
-                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .background(Color(0xDD1E1B4B))
+                .border(1.dp, SecondaryCyan.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 7.dp, vertical = 2.dp)
         ) {
             Text(
                 text = "KARAOKE",
                 color = Color.White,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Black,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp
             )
         }
 
-        // Artist & Title (Bottom Left)
+        // Very Large Song Title & Artist (Inside card, filling it for distance TV viewing)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(8.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Text(
-                text = song.artist,
+                text = song.title,
                 color = Color.White,
-                fontSize = 12.sp,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 25.sp
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = song.artist,
+                color = SecondaryCyan,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = song.title,
-                color = Color(0xFFE2E8F0),
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
-
-        // Duration (Bottom Right)
-        val durationFormatted = song.bestVersion?.durationFormatted ?: "3:30"
-        Text(
-            text = durationFormatted,
-            color = Color(0xFFCBD5E1),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-        )
     }
 }

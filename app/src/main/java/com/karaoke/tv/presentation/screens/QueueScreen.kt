@@ -186,7 +186,7 @@ fun QueueScreen(
                         // Thumbnail
                         Box(
                             modifier = Modifier
-                                .size(64.dp, 48.dp)
+                                .size(80.dp, 56.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color.Black)
                         ) {
@@ -200,7 +200,7 @@ fun QueueScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(14.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
 
                         // Title, Artist, Singer
                         Column(modifier = Modifier.weight(1f)) {
@@ -208,33 +208,35 @@ fun QueueScreen(
                                 Text(
                                     text = item.songTitle,
                                     color = TextPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Black,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 item.selectedVersion?.let { ver ->
                                     SourceBadge(source = ver.source)
                                 }
                             }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = item.songArtist,
-                                color = TextSecondary,
-                                fontSize = 13.sp,
+                                color = SecondaryCyan,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
                                 Text(
                                     text = "🎤 Поет: ",
                                     color = TextMuted,
-                                    fontSize = 12.sp
+                                    fontSize = 15.sp
                                 )
                                 Text(
                                     text = item.participantName,
                                     color = GoldStar,
-                                    fontSize = 13.sp,
+                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
