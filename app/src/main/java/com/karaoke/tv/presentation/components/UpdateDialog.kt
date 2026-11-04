@@ -1,5 +1,6 @@
 package com.karaoke.tv.presentation.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -33,17 +34,21 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.karaoke.tv.presentation.theme.BackgroundDark
 import com.karaoke.tv.presentation.theme.ErrorRed
 import com.karaoke.tv.presentation.theme.NeonCyan
@@ -67,16 +72,24 @@ fun UpdateDialog(
     onInstallApk: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Dimmed full-screen backdrop
+    BackHandler(enabled = !updateInfo.forceUpdate && updateStatus !is UpdateStatus.Downloading) {
+        onDismiss()
+    }
+
+    val primaryActionFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(updateStatus) {
+        delay(150)
+        runCatching {
+            primaryActionFocusRequester.requestFocus()
+        }
+    }
+
+    // Dimmed full-screen backdrop (non-clickable so D-pad cannot steal focus)
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                if (!updateInfo.forceUpdate && updateStatus !is UpdateStatus.Downloading) {
-                    onDismiss()
-                }
-            },
+            .background(Color.Black.copy(alpha = 0.85f)),
         contentAlignment = Alignment.Center
     ) {
         // Centered Card Container
@@ -92,7 +105,6 @@ fun UpdateDialog(
                     ),
                     shape = RoundedCornerShape(20.dp)
                 )
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {} // Prevent click-through
                 .padding(26.dp)
         ) {
             Column(
@@ -319,6 +331,7 @@ fun UpdateDialog(
                             OtaDialogButton(
                                 text = "Установить обновление",
                                 isPrimary = true,
+                                focusRequester = primaryActionFocusRequester,
                                 onClick = onInstallApk
                             )
                         }
@@ -327,6 +340,7 @@ fun UpdateDialog(
                             OtaDialogButton(
                                 text = "Повторить попытку",
                                 isPrimary = true,
+                                focusRequester = primaryActionFocusRequester,
                                 onClick = onStartDownload
                             )
                         }
@@ -335,6 +349,7 @@ fun UpdateDialog(
                             OtaDialogButton(
                                 text = "Обновить сейчас",
                                 isPrimary = true,
+                                focusRequester = primaryActionFocusRequester,
                                 onClick = onStartDownload
                             )
                         }
@@ -350,6 +365,7 @@ private fun OtaDialogButton(
     text: String,
     isPrimary: Boolean,
     enabled: Boolean = true,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -364,25 +380,33 @@ private fun OtaDialogButton(
         else -> Brush.linearGradient(listOf(Color(0xFF161426), Color(0xFF161426)))
     }
 
+    var buttonModifier = Modifier
+        .scale(scale)
+        .clip(RoundedCornerShape(12.dp))
+        .background(backgroundBrush)
+        .border(
+            width = if (isFocused) 2.dp else 1.dp,
+            color = when {
+                isFocused -> NeonCyan
+                isPrimary -> PrimaryPurpleGlow
+                else -> Color(0xFF332D4F)
+            },
+            shape = RoundedCornerShape(12.dp)
+        )
+
+    if (focusRequester != null) {
+        buttonModifier = buttonModifier.focusRequester(focusRequester)
+    }
+
+    buttonModifier = buttonModifier
+        .focusable(enabled = enabled, interactionSource = interactionSource)
+        .clickable(enabled = enabled, interactionSource = interactionSource, indication = null) {
+            onClick()
+        }
+        .padding(horizontal = 20.dp, vertical = 11.dp)
+
     Box(
-        modifier = Modifier
-            .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
-            .background(backgroundBrush)
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = when {
-                    isFocused -> NeonCyan
-                    isPrimary -> PrimaryPurpleGlow
-                    else -> Color(0xFF332D4F)
-                },
-                shape = RoundedCornerShape(12.dp)
-            )
-            .focusable(enabled = enabled, interactionSource = interactionSource)
-            .clickable(enabled = enabled, interactionSource = interactionSource, indication = null) {
-                onClick()
-            }
-            .padding(horizontal = 20.dp, vertical = 11.dp),
+        modifier = buttonModifier,
         contentAlignment = Alignment.Center
     ) {
         Text(

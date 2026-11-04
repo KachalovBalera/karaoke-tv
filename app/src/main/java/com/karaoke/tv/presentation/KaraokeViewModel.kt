@@ -71,7 +71,7 @@ data class UiState(
     val updateInfo: AppUpdateInfo? = null,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
     val showUpdateDialog: Boolean = false,
-    val currentAppVersion: String = "1.3.0",
+    val currentAppVersion: String = "",
     val customManifestUrl: String = "",
     val searchSuggestions: List<Song> = emptyList(),
     val songsByCategory: Map<String, List<Song>> = emptyMap()
@@ -693,7 +693,7 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
     fun installUpdate() {
         val apkFile = when (val s = _uiState.value.updateStatus) {
             is UpdateStatus.ReadyToInstall -> s.apkFile
-            else -> updateManager.getCachedApk()
+            else -> updateManager.getCachedApk(_uiState.value.updateInfo?.version)
         }
         if (apkFile == null || !apkFile.exists()) {
             _uiState.value = _uiState.value.copy(

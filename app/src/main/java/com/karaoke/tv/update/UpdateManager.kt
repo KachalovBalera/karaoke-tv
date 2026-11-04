@@ -2,9 +2,11 @@ package com.karaoke.tv.update
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -19,6 +21,7 @@ import java.util.concurrent.TimeUnit
 class UpdateManager(private val context: Context) {
 
     companion object {
+        private const val TAG = "UpdateManager"
         const val PREFS_NAME = "karaoke_update_prefs"
         const val KEY_CUSTOM_MANIFEST_URL = "custom_manifest_url"
         const val DEFAULT_MANIFEST_URL =
@@ -188,14 +191,28 @@ class UpdateManager(private val context: Context) {
 
     /**
      * Проверяет, скачан ли уже рабочий APK для указанной версии.
+     * Если файл устарел или не соответствует expectedVersion, он автоматически удаляется.
      */
     fun getCachedApk(expectedVersion: String? = null): File? {
         val file = File(getUpdateDir(), APK_FILE_NAME)
-        return if (file.exists() && file.isFile && file.length() > 5 * 1024 * 1024) {
-            file
-        } else {
-            null
+        if (!file.exists() || !file.isFile || file.length() < 5 * 1024 * 1024) {
+            return null
         }
+        if (expectedVersion != null) {
+            val archiveInfo = runCatching {
+                context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+            }.getOrNull()
+
+            if (archiveInfo == null || archiveInfo.versionName != expectedVersion) {
+                Log.w(
+                    TAG,
+                    "Cached APK (${archiveInfo?.versionName}) does not match expected version ($expectedVersion), deleting stale file"
+                )
+                runCatching { file.delete() }
+                return null
+            }
+        }
+        return file
     }
 
     /**
@@ -267,12 +284,25 @@ class UpdateManager(private val context: Context) {
                 }
             }
 
+            // Валидация скачанного файла как валидного APK пакета
+            val archiveInfo = runCatching {
+                context.packageManager.getPackageArchiveInfo(tempFile.absolutePath, 0)
+            }.getOrNull()
+
+            if (archiveInfo == null || archiveInfo.packageName != context.packageName) {
+                tempFile.delete()
+                return@withContext Result.failure(
+                    Exception("Скачанный файл повреждён или не является пакетом приложения Karaoke TV")
+                )
+            }
+
             if (targetFile.exists()) targetFile.delete()
             if (!tempFile.renameTo(targetFile)) {
                 // Если renameTo не сработал через границы разделов
                 tempFile.copyTo(targetFile, overwrite = true)
                 tempFile.delete()
             }
+            targetFile.setReadable(true, false)
 
             onProgress(1.0f, downloadedBytes, contentLength)
             Result.success(targetFile)
@@ -291,9 +321,13 @@ class UpdateManager(private val context: Context) {
                 return Result.failure(Exception("Файл APK не найден или повреждён"))
             }
 
+            // Обеспечиваем доступность файла для чтения сторонними процессами
+            apkFile.setReadable(true, false)
+
             // Проверка разрешения на установку неизвестных приложений (Android 8.0+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!context.packageManager.canRequestPackageInstalls()) {
+                    Log.i(TAG, "REQUEST_INSTALL_PACKAGES not granted, opening settings")
                     try {
                         val settingsIntent = Intent(
                             Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -322,14 +356,49 @@ class UpdateManager(private val context: Context) {
                 apkFile
             )
 
+            Log.i(TAG, "Starting PackageInstaller with apkUri: $apkUri, size: ${apkFile.length()} bytes")
+
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(apkUri, "application/vnd.android.package-archive")
                 flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
             }
 
-            context.startActivity(installIntent)
+            // Явно выдаем права на чтение Uri для PackageInstaller
+            val packageInstallerCandidates = listOf(
+                "com.android.packageinstaller",
+                "com.google.android.packageinstaller"
+            )
+            for (pkg in packageInstallerCandidates) {
+                runCatching {
+                    context.grantUriPermission(pkg, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+
+            // Также выдаем права всем резолверам данного интента
+            runCatching {
+                val resInfoList = context.packageManager.queryIntentActivities(installIntent, 0)
+                for (resolveInfo in resInfoList) {
+                    val pkg = resolveInfo.activityInfo.packageName
+                    context.grantUriPermission(pkg, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+
+            try {
+                context.startActivity(installIntent)
+            } catch (e: Exception) {
+                Log.w(TAG, "ACTION_VIEW failed, attempting ACTION_INSTALL_PACKAGE fallback: ${e.message}")
+                val fallbackIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                    setDataAndType(apkUri, "application/vnd.android.package-archive")
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+                    putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                }
+                context.startActivity(fallbackIntent)
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch package installer", e)
             Result.failure(Exception("Не удалось запустить установщик Android: ${e.localizedMessage ?: e.message}"))
         }
     }

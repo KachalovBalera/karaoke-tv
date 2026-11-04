@@ -35,12 +35,18 @@ async function main() {
   console.log(`Версия: ${APP_VERSION}`);
 
   const projectDir = __dirname;
-  if (!fs.existsSync(releaseApkPath)) {
+  if (!fs.existsSync(releaseApkPath) && !process.env.SKIP_BUILD) {
     console.log('\nЗапускаем сборку release APK (assembleRelease)...');
-    execSync('gradlew.bat assembleRelease --console=plain', {
-      cwd: projectDir,
-      stdio: 'inherit'
-    });
+    try {
+      execSync(`cmd /c "subst K: /d & subst K: \\"${projectDir}\\" && cd /d K:\\ && gradlew.bat assembleRelease && subst K: /d"`, {
+        stdio: 'inherit'
+      });
+    } catch {
+      execSync('gradlew.bat assembleRelease --console=plain', {
+        cwd: projectDir,
+        stdio: 'inherit'
+      });
+    }
   }
 
   if (!fs.existsSync(releaseApkPath)) {
