@@ -73,7 +73,8 @@ data class UiState(
     val showUpdateDialog: Boolean = false,
     val currentAppVersion: String = "1.3.0",
     val customManifestUrl: String = "",
-    val searchSuggestions: List<Song> = emptyList()
+    val searchSuggestions: List<Song> = emptyList(),
+    val songsByCategory: Map<String, List<Song>> = emptyMap()
 )
 
 class KaraokeViewModel(application: Application) : AndroidViewModel(application) {
@@ -173,11 +174,22 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun refreshCategorySongs() {
+        viewModelScope.launch {
+            val map = withContext(Dispatchers.IO) {
+                CategoryCatalogue.getAllCategorySongs(db)
+            }
+            _uiState.value = _uiState.value.copy(songsByCategory = map)
+        }
+    }
+
     init {
         phoneServerManager.start()
         refreshAudioStatus()
         loadSearchHistory()
         checkForUpdates(isAutoCheck = true)
+        CategoryCatalogue.initDatabase(db)
+        refreshCategorySongs()
 
         viewModelScope.launch {
             checkAndInitializeGoogleDrive()
@@ -208,6 +220,7 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
             totalDriveSongsCount = count
         )
         refreshPopularSongs()
+        refreshCategorySongs()
         if (hasCreds && count == 0) {
             Log.i(TAG, "Google Drive credentials found, but Room catalog is empty. Auto-starting initial sync...")
             syncGoogleDrive(DEFAULT_GOOGLE_DRIVE_FOLDER_ID)
@@ -298,6 +311,9 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             var effectiveVersion = version ?: song.versions.firstOrNull { it.source == SourceType.GOOGLE_DRIVE }
                 ?: song.versions.firstOrNull()
+                ?: withContext(Dispatchers.IO) {
+                    db.karaokeVersionDao().getVersionsForSong(song.id).firstOrNull()?.toDomain()
+                }
                 ?: KaraokeVersion(
                     id = "${song.id}_gdrive",
                     songId = song.id,
@@ -321,19 +337,7 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
                 embedUrl = streamUrl
             )
 
-            // Remove any currently playing item so the new track starts immediately
-            val currentQueue = queueRepository.getQueue()
-            val existingCurrent = currentQueue.firstOrNull { it.status == com.karaoke.tv.domain.model.QueueStatus.CURRENT }
-            if (existingCurrent != null) {
-                queueRepository.removeFromQueue(existingCurrent.id)
-            }
-
-            val item = queueRepository.addToQueue(song, effectiveVersion, participantName)
-            while (true) {
-                val idx = queueRepository.getQueue().indexOfFirst { it.id == item.id }
-                if (idx <= 0) break
-                queueRepository.moveUp(item.id)
-            }
+            val item = queueRepository.playImmediately(song, effectiveVersion, participantName)
 
             _uiState.value = _uiState.value.copy(
                 activePlayingItem = item,
@@ -361,6 +365,9 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             var effectiveVersion = version ?: song.versions.firstOrNull { it.source == SourceType.GOOGLE_DRIVE }
                 ?: song.versions.firstOrNull()
+                ?: withContext(Dispatchers.IO) {
+                    db.karaokeVersionDao().getVersionsForSong(song.id).firstOrNull()?.toDomain()
+                }
                 ?: KaraokeVersion(
                     id = "${song.id}_gdrive",
                     songId = song.id,
@@ -539,6 +546,7 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
                     googleDriveAccountEmail = googleAuthManager.clientEmail.orEmpty()
                 )
                 refreshPopularSongs()
+                refreshCategorySongs()
             } catch (e: Exception) {
                 Log.e(TAG, "Google Drive sync error: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(

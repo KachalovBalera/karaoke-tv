@@ -9,6 +9,7 @@ interface QueueRepository {
     fun getQueueFlow(): Flow<List<QueueItem>>
     suspend fun getQueue(): List<QueueItem>
     suspend fun addToQueue(song: Song, version: KaraokeVersion, participantName: String): QueueItem
+    suspend fun playImmediately(song: Song, version: KaraokeVersion, participantName: String): QueueItem
     suspend fun removeFromQueue(itemId: Long)
     suspend fun moveUp(itemId: Long)
     suspend fun moveDown(itemId: Long)

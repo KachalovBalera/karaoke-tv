@@ -66,12 +66,13 @@ import com.karaoke.tv.presentation.theme.TextSecondary
 fun CategoryScreen(
     title: String,
     category: String,
+    songs: List<Song> = emptyList(),
     preferredSource: SourceType? = null,
     onSongSelected: (Song) -> Unit,
     onBack: () -> Unit
 ) {
-    val songs = remember(category, preferredSource) {
-        CategoryCatalogue.getSongsForCategory(category, preferredSource)
+    val displaySongs = remember(songs, category, preferredSource) {
+        if (songs.isNotEmpty()) songs else CategoryCatalogue.getSongsForCategory(category, preferredSource)
     }
 
     Column(
@@ -140,7 +141,7 @@ fun CategoryScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(songs) { song ->
+            items(displaySongs) { song ->
                 CategorySongCard(
                     song = song,
                     onClick = { onSongSelected(song) },

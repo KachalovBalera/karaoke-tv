@@ -195,13 +195,15 @@ class MainActivity : ComponentActivity() {
                             when (uiState.selectedNavIndex) {
                                 // 0: Главная
                                 0 -> HomeScreen(
-                                    songsByCategory = mapOf(
-                                        "Русский поп" to CategoryCatalogue.getSongsForCategory("Русский поп", uiState.sourcePriority),
-                                        "Рок" to CategoryCatalogue.getSongsForCategory("Рок", uiState.sourcePriority),
-                                        "Дискотека 90-х" to CategoryCatalogue.getSongsForCategory("Дискотека 90-х", uiState.sourcePriority),
-                                        "Хиты 2000-х" to CategoryCatalogue.getSongsForCategory("Хиты 2000-х", uiState.sourcePriority),
-                                        "Детские песни" to CategoryCatalogue.getSongsForCategory("Детские песни", uiState.sourcePriority)
-                                    ),
+                                    songsByCategory = uiState.songsByCategory.ifEmpty {
+                                        mapOf(
+                                            "Русский поп" to CategoryCatalogue.getSongsForCategory("Русский поп", uiState.sourcePriority),
+                                            "Рок" to CategoryCatalogue.getSongsForCategory("Рок", uiState.sourcePriority),
+                                            "Дискотека 90-х" to CategoryCatalogue.getSongsForCategory("Дискотека 90-х", uiState.sourcePriority),
+                                            "Хиты 2000-х" to CategoryCatalogue.getSongsForCategory("Хиты 2000-х", uiState.sourcePriority),
+                                            "Детские песни" to CategoryCatalogue.getSongsForCategory("Детские песни", uiState.sourcePriority)
+                                        )
+                                    },
                                     currentQueue = queue,
                                     popularSongs = popularSongs,
                                     selectedSource = uiState.sourcePriority,
@@ -316,6 +318,7 @@ class MainActivity : ComponentActivity() {
                                 9 -> CategoryScreen(
                                     title = currentCategoryTitle,
                                     category = currentCategoryTitle,
+                                    songs = uiState.songsByCategory[currentCategoryTitle].orEmpty(),
                                     preferredSource = uiState.sourcePriority,
                                     onSongSelected = { viewModel.openSongDetails(it) },
                                     onBack = { viewModel.selectNavIndex(0) }

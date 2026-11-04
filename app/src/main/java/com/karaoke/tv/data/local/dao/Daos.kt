@@ -114,10 +114,10 @@ interface KaraokeVersionDao {
 
 @Dao
 interface QueueDao {
-    @Query("SELECT * FROM queue_items ORDER BY position ASC")
+    @Query("SELECT * FROM queue_items ORDER BY position ASC, id ASC")
     fun getQueueFlow(): Flow<List<QueueItemEntity>>
 
-    @Query("SELECT * FROM queue_items ORDER BY position ASC")
+    @Query("SELECT * FROM queue_items ORDER BY position ASC, id ASC")
     suspend fun getQueue(): List<QueueItemEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

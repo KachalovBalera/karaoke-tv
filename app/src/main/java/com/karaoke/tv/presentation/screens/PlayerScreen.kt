@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
@@ -327,10 +328,23 @@ fun PlayerScreen(
         }
     }
 
+    // Auto-focus retry button on error overlay so remote control is always active
+    LaunchedEffect(hasPlaybackError) {
+        if (hasPlaybackError) {
+            delay(150)
+            try {
+                retryFocusRequester.requestFocus()
+            } catch (_: Exception) {}
+        }
+    }
+
     // D-PAD & Remote Navigation handling
     BackHandler {
         if (showVersionSwitchDialog) {
             showVersionSwitchDialog = false
+        } else if (hasPlaybackError) {
+            // When error screen is visible, Back exits cleanly without hanging
+            onClosePlayer(false)
         } else if (isControlsVisible) {
             isControlsVisible = false
         } else {
@@ -707,6 +721,16 @@ fun PlayerScreen(
                             isPrimary = false,
                             leadingIcon = {
                                 Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                        )
+
+                        TvButton(
+                            text = "Закрыть",
+                            onClick = { onClosePlayer(false) },
+                            modifier = Modifier.weight(1f),
+                            isPrimary = false,
+                            leadingIcon = {
+                                Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                             }
                         )
                     }

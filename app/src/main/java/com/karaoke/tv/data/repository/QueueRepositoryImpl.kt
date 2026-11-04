@@ -18,14 +18,15 @@ class QueueRepositoryImpl(
     override fun getQueueFlow(): Flow<List<QueueItem>> {
         return database.queueDao().getQueueFlow().map { entities ->
             entities.map { entity ->
-                val version = database.karaokeVersionDao().getVersionById(entity.selectedVersionId)?.toDomain()
+                val version = (database.karaokeVersionDao().getVersionById(entity.selectedVersionId)
+                    ?: database.karaokeVersionDao().getVersionsForSong(entity.songId).firstOrNull())?.toDomain()
                 QueueItem(
                     id = entity.id,
                     songId = entity.songId,
                     songTitle = entity.songTitle,
                     songArtist = entity.songArtist,
                     coverUrl = entity.coverUrl,
-                    selectedVersionId = entity.selectedVersionId,
+                    selectedVersionId = version?.id ?: entity.selectedVersionId,
                     selectedVersion = version,
                     participantName = entity.participantName,
                     position = entity.position,
@@ -39,14 +40,15 @@ class QueueRepositoryImpl(
     override suspend fun getQueue(): List<QueueItem> {
         val entities = database.queueDao().getQueue()
         return entities.map { entity ->
-            val version = database.karaokeVersionDao().getVersionById(entity.selectedVersionId)?.toDomain()
+            val version = (database.karaokeVersionDao().getVersionById(entity.selectedVersionId)
+                ?: database.karaokeVersionDao().getVersionsForSong(entity.songId).firstOrNull())?.toDomain()
             QueueItem(
                 id = entity.id,
                 songId = entity.songId,
                 songTitle = entity.songTitle,
                 songArtist = entity.songArtist,
                 coverUrl = entity.coverUrl,
-                selectedVersionId = entity.selectedVersionId,
+                selectedVersionId = version?.id ?: entity.selectedVersionId,
                 selectedVersion = version,
                 participantName = entity.participantName,
                 position = entity.position,
@@ -100,6 +102,8 @@ class QueueRepositoryImpl(
         )
 
         val generatedId = database.queueDao().insertItem(entity)
+        reindexQueue()
+
         return QueueItem(
             id = generatedId,
             songId = song.id,
@@ -111,6 +115,68 @@ class QueueRepositoryImpl(
             participantName = entity.participantName,
             position = newPos,
             status = entity.status
+        )
+    }
+
+    override suspend fun playImmediately(
+        song: Song,
+        version: KaraokeVersion,
+        participantName: String
+    ): QueueItem {
+        // Shift existing items down so existing user queue is fully preserved
+        val existing = database.queueDao().getQueue()
+        for (item in existing) {
+            database.queueDao().updateItem(item.copy(position = item.position + 1, status = QueueStatus.WAITING))
+        }
+
+        database.karaokeVersionDao().insertVersion(
+            com.karaoke.tv.data.local.entity.KaraokeVersionEntity(
+                id = version.id,
+                songId = song.id,
+                source = version.source,
+                sourceVideoId = version.sourceVideoId,
+                title = version.title,
+                channelOrAuthor = version.channelOrAuthor,
+                thumbnailUrl = version.thumbnailUrl,
+                durationSeconds = version.durationSeconds,
+                videoUrl = version.videoUrl,
+                embedUrl = version.embedUrl,
+                quality = version.quality,
+                karaokeScore = version.karaokeScore,
+                userRatingAverage = version.userRatingAverage,
+                ratingCount = version.ratingCount,
+                isEmbeddable = version.isEmbeddable,
+                verificationStatus = version.verificationStatus,
+                availabilityStatus = version.availabilityStatus,
+                lastCheckedTs = version.lastCheckedTs
+            )
+        )
+
+        val entity = QueueItemEntity(
+            songId = song.id,
+            songTitle = song.title,
+            songArtist = song.artist,
+            coverUrl = song.coverUrl,
+            selectedVersionId = version.id,
+            participantName = participantName.ifBlank { "Гость" },
+            position = 0,
+            status = QueueStatus.CURRENT
+        )
+
+        val generatedId = database.queueDao().insertItem(entity)
+        reindexQueue()
+
+        return QueueItem(
+            id = generatedId,
+            songId = song.id,
+            songTitle = song.title,
+            songArtist = song.artist,
+            coverUrl = song.coverUrl,
+            selectedVersionId = version.id,
+            selectedVersion = version,
+            participantName = entity.participantName,
+            position = 0,
+            status = QueueStatus.CURRENT
         )
     }
 
@@ -131,6 +197,7 @@ class QueueRepositoryImpl(
 
             database.queueDao().updateItem(updatedCurr)
             database.queueDao().updateItem(updatedPrev)
+            reindexQueue()
         }
     }
 
@@ -146,6 +213,7 @@ class QueueRepositoryImpl(
 
             database.queueDao().updateItem(updatedCurr)
             database.queueDao().updateItem(updatedNext)
+            reindexQueue()
         }
     }
 
