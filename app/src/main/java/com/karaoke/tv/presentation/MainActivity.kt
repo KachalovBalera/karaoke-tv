@@ -576,23 +576,24 @@ fun TvSidebarNavigation(
             .border(width = 1.dp, color = Color(0x3338BDF8))
             .padding(vertical = 12.dp, horizontal = 14.dp)
     ) {
-        // App Logo Header with neon microphone graphic & slogan
+        // App Logo Header with neon TV & microphone
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .padding(vertical = 4.dp),
+            contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = R.drawable.app_logo),
                 contentDescription = "Karaoke TV",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
+                    .size(82.dp)
+                    .clip(RoundedCornerShape(14.dp))
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Navigation Items
         navItems.forEach { item ->
