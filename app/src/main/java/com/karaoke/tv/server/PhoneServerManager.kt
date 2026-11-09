@@ -75,7 +75,6 @@ class PhoneServerManager(
     private var latestQueueJson: String = "[]"
     private var currentPlayingInfoJson: String = "{}"
     var onVoiceSearchQuery: ((String) -> Unit)? = null
-    var onTriggerVoiceSearch: (() -> Unit)? = null
 
     fun start() {
         if (isRunning) return
@@ -420,9 +419,6 @@ class PhoneServerManager(
                             onPlayerAction("skip")
                             queueRepository.skipCurrent()
                         }
-                        "voice", "voice_tv" -> {
-                            onTriggerVoiceSearch?.invoke()
-                        }
                     }
                     sendResponse(output, 200, "application/json", """{"status":"ok"}""")
                 }
@@ -433,8 +429,6 @@ class PhoneServerManager(
                     val query = json.optString("query").trim()
                     if (query.isNotBlank()) {
                         onVoiceSearchQuery?.invoke(query)
-                    } else {
-                        onTriggerVoiceSearch?.invoke()
                     }
                     sendResponse(output, 200, "application/json", """{"status":"ok"}""")
                 }

@@ -136,16 +136,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        viewModel.phoneServerManager.onTriggerVoiceSearch = {
-            runOnUiThread {
-                launchVoiceSearch()
-            }
-        }
-
         viewModel.phoneServerManager.onVoiceSearchQuery = { spokenQuery ->
-            runOnUiThread {
-                viewModel.triggerVoiceSearch(spokenQuery)
-            }
+            viewModel.triggerVoiceSearch(spokenQuery)
         }
 
         setContent {

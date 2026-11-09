@@ -373,8 +373,6 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
 
     fun triggerVoiceSearch(query: String) {
         _uiState.value = _uiState.value.copy(
-            isPlayerOpen = false,
-            selectedSongForDetails = null,
             selectedNavIndex = 1,
             searchQuery = query
         )
