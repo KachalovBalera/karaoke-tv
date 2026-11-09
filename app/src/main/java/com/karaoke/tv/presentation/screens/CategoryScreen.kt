@@ -154,7 +154,7 @@ fun CategoryScreen(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CategorySongCard(
+fun CategorySongCard(
     song: Song,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null

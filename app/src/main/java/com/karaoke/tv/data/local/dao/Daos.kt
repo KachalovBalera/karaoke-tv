@@ -183,6 +183,9 @@ interface HistoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHistory(history: PlaybackHistoryEntity)
 
+    @Query("DELETE FROM playback_history")
+    suspend fun clearPlaybackHistory()
+
     @Query("SELECT * FROM search_history ORDER BY timestamp DESC LIMIT 20")
     fun getSearchHistory(): Flow<List<SearchHistoryEntity>>
 

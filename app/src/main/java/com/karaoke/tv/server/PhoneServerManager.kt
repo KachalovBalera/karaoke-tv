@@ -75,6 +75,7 @@ class PhoneServerManager(
     private var latestQueueJson: String = "[]"
     private var currentPlayingInfoJson: String = "{}"
     var onVoiceSearchQuery: ((String) -> Unit)? = null
+    var onTriggerVoiceSearch: (() -> Unit)? = null
 
     fun start() {
         if (isRunning) return
@@ -252,7 +253,8 @@ class PhoneServerManager(
                 }
 
                 uriPath == "/api/history" && method == "GET" -> {
-                    val historyList = db?.historyDao()?.getRecentHistory(10)?.firstOrNull() ?: emptyList()
+                    val rawHistory = db?.historyDao()?.getRecentHistory(30)?.firstOrNull() ?: emptyList()
+                    val historyList = rawHistory.distinctBy { it.songId }.take(15)
                     val array = JSONArray()
                     for (h in historyList) {
                         array.put(JSONObject().apply {
@@ -408,7 +410,7 @@ class PhoneServerManager(
                     sendResponse(output, 200, "application/json", """{"status":"ok"}""")
                 }
 
-                uriPath == "/api/playback/action" && method == "POST" -> {
+                (uriPath == "/api/playback/action" || uriPath == "/api/remote/action") && method == "POST" -> {
                     val body = readBody(input, headers["content-length"]?.toIntOrNull() ?: 0).removePrefix("\uFEFF").trim()
                     val json = JSONObject(body)
                     val action = json.optString("action")
@@ -417,6 +419,9 @@ class PhoneServerManager(
                         "skip" -> {
                             onPlayerAction("skip")
                             queueRepository.skipCurrent()
+                        }
+                        "voice", "voice_tv" -> {
+                            onTriggerVoiceSearch?.invoke()
                         }
                     }
                     sendResponse(output, 200, "application/json", """{"status":"ok"}""")
@@ -428,6 +433,8 @@ class PhoneServerManager(
                     val query = json.optString("query").trim()
                     if (query.isNotBlank()) {
                         onVoiceSearchQuery?.invoke(query)
+                    } else {
+                        onTriggerVoiceSearch?.invoke()
                     }
                     sendResponse(output, 200, "application/json", """{"status":"ok"}""")
                 }

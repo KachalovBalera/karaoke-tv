@@ -16,6 +16,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -28,6 +29,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -37,6 +39,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,12 +69,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karaoke.tv.R
@@ -77,6 +84,7 @@ import com.karaoke.tv.data.local.CategoryCatalogue
 import com.karaoke.tv.domain.model.Song
 import com.karaoke.tv.presentation.components.UpdateDialog
 import com.karaoke.tv.presentation.screens.CategoryScreen
+import com.karaoke.tv.presentation.screens.CategorySongCard
 import com.karaoke.tv.presentation.screens.HomeScreen
 import com.karaoke.tv.presentation.screens.PartyModeScreen
 import com.karaoke.tv.presentation.screens.PhoneConnectScreen
@@ -128,8 +136,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        viewModel.phoneServerManager.onTriggerVoiceSearch = {
+            runOnUiThread {
+                launchVoiceSearch()
+            }
+        }
+
         viewModel.phoneServerManager.onVoiceSearchQuery = { spokenQuery ->
-            viewModel.triggerVoiceSearch(spokenQuery)
+            runOnUiThread {
+                viewModel.triggerVoiceSearch(spokenQuery)
+            }
         }
 
         setContent {
@@ -137,6 +153,8 @@ class MainActivity : ComponentActivity() {
                 val uiState by viewModel.uiState.collectAsState()
                 val queue by viewModel.queueFlow.collectAsState()
                 val favoriteIds by viewModel.favoriteIdsFlow.collectAsState()
+                val favoriteSongs by viewModel.favoriteSongs.collectAsState()
+                val playbackHistorySongs by viewModel.playbackHistorySongs.collectAsState()
                 val popularSongs by viewModel.popularSongs.collectAsState()
                 val connectedPhonesCount by viewModel.phoneServerManager.connectedCount.collectAsState()
                 val connectedClients by viewModel.phoneServerManager.connectedClients.collectAsState()
@@ -254,13 +272,15 @@ class MainActivity : ComponentActivity() {
 
                                 // 3: Избранное
                                 3 -> FavoritesScreen(
-                                    favoriteIds = favoriteIds,
+                                    favoriteSongs = favoriteSongs,
                                     onSongSelected = { viewModel.openSongDetails(it) }
                                 )
 
                                 // 4: История
                                 4 -> HistoryScreen(
-                                    onSongSelected = { viewModel.openSongDetails(it) }
+                                    historySongs = playbackHistorySongs,
+                                    onSongSelected = { viewModel.openSongDetails(it) },
+                                    onClearHistory = { viewModel.clearPlaybackHistory() }
                                 )
 
                                 // 5: Рейтинг / Режим вечеринки
@@ -736,53 +756,196 @@ fun TvSidebarNavigation(
 
 @Composable
 fun FavoritesScreen(
-    favoriteIds: List<String>,
+    favoriteSongs: List<Song>,
     onSongSelected: (Song) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            .padding(32.dp)
+            .padding(horizontal = 28.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "ИЗБРАННОЕ",
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Black
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        if (favoriteIds.isEmpty()) {
+        Column {
             Text(
-                text = "В избранном пока нет песен. Откройте любую песню и нажмите «В избранное», чтобы добавить её в этот список.",
-                color = TextMuted,
-                fontSize = 14.sp
+                text = "ИЗБРАННОЕ",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-0.5).sp
             )
+            Text(
+                text = if (favoriteSongs.isEmpty()) "Ваши сохранённые караоке-композиции" else "Любимые песни • ${favoriteSongs.size} треков",
+                color = Color(0xFFDDD6FE),
+                fontSize = 13.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        if (favoriteSongs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(vertical = 40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF131122))
+                        .border(1.dp, Color(0xFF26203D), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 40.dp, vertical = 32.dp)
+                ) {
+                    Text(
+                        text = "⭐ В избранном пока пусто",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Откройте любую песню и нажмите «В избранное»,\nчтобы быстро находить её здесь!",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(favoriteSongs, key = { it.id }) { song ->
+                    CategorySongCard(
+                        song = song,
+                        onClick = { onSongSelected(song) },
+                        onLongClick = { onSongSelected(song) }
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
 fun HistoryScreen(
-    onSongSelected: (Song) -> Unit
+    historySongs: List<Song>,
+    onSongSelected: (Song) -> Unit,
+    onClearHistory: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            .padding(32.dp)
+            .padding(horizontal = 28.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = "ИСТОРИЯ ИСПОЛНЕНИЙ",
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Black
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Список песен, которые вы и ваши гости пели в этой караоке-системе ранее.",
-            color = Color(0xFFCBD5E1),
-            fontSize = 14.sp
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "ИСТОРИЯ ИСПОЛНЕНИЙ",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.5).sp
+                )
+                Text(
+                    text = if (historySongs.isEmpty()) "Список песен, которые вы пели в караоке ранее" else "Недавно спетые треки • ${historySongs.size} песен",
+                    color = Color(0xFFDDD6FE),
+                    fontSize = 13.sp
+                )
+            }
+
+            if (historySongs.isNotEmpty()) {
+                val clearInteraction = remember { MutableInteractionSource() }
+                val clearFocused by clearInteraction.collectIsFocusedAsState()
+                val clearScale by animateFloatAsState(targetValue = if (clearFocused) 1.05f else 1.0f, label = "clearHistoryScale")
+
+                Box(
+                    modifier = Modifier
+                        .scale(clearScale)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (clearFocused) Color(0xFFEF4444) else Color(0x33EF4444))
+                        .border(
+                            width = if (clearFocused) 2.dp else 1.dp,
+                            color = if (clearFocused) Color.White else Color(0xFFEF4444).copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .focusable(interactionSource = clearInteraction)
+                        .clickable(interactionSource = clearInteraction, indication = null) {
+                            onClearHistory()
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Очистить историю",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        if (historySongs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(vertical = 40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF131122))
+                        .border(1.dp, Color(0xFF26203D), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 40.dp, vertical = 32.dp)
+                ) {
+                    Text(
+                        text = "🎤 История пока пуста",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Включите любую песню из каталога или поиска,\nи она автоматически появится в этом списке!",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(historySongs, key = { it.id }) { song ->
+                    CategorySongCard(
+                        song = song,
+                        onClick = { onSongSelected(song) },
+                        onLongClick = { onSongSelected(song) }
+                    )
+                }
+            }
+        }
     }
 }

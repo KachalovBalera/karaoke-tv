@@ -39,6 +39,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -144,6 +146,96 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    val playbackHistorySongs: StateFlow<List<Song>> = db.historyDao()
+        .getRecentHistory(100)
+        .map { entities ->
+            val seenSongIds = mutableSetOf<String>()
+            val distinctEntities = entities.filter { seenSongIds.add(it.songId) }
+            distinctEntities.map { entity ->
+                val dbSong = db.songDao().getSongById(entity.songId)
+                val versions = db.karaokeVersionDao().getVersionsForSong(entity.songId).map { it.toDomain() }
+                if (dbSong != null) {
+                    Song(
+                        id = dbSong.id,
+                        title = dbSong.title,
+                        artist = dbSong.artist,
+                        coverUrl = dbSong.coverUrl,
+                        category = dbSong.category,
+                        versions = versions.ifEmpty {
+                            listOf(createDriveVersion(entity.songId, entity.versionId, entity.title, entity.artist))
+                        },
+                        bestVersionId = versions.firstOrNull()?.id ?: entity.versionId
+                    )
+                } else {
+                    val fallbackVer = createDriveVersion(entity.songId, entity.versionId, entity.title, entity.artist)
+                    Song(
+                        id = entity.songId,
+                        title = entity.title,
+                        artist = entity.artist,
+                        coverUrl = "",
+                        category = "История",
+                        versions = listOf(fallbackVer),
+                        bestVersionId = fallbackVer.id
+                    )
+                }
+            }
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val favoriteSongs: StateFlow<List<Song>> = db.favoriteDao()
+        .getFavoriteSongIdsFlow()
+        .map { ids ->
+            ids.mapNotNull { id ->
+                val dbSong = db.songDao().getSongById(id) ?: return@mapNotNull null
+                val versions = db.karaokeVersionDao().getVersionsForSong(id).map { it.toDomain() }
+                Song(
+                    id = dbSong.id,
+                    title = dbSong.title,
+                    artist = dbSong.artist,
+                    coverUrl = dbSong.coverUrl,
+                    category = dbSong.category,
+                    versions = versions,
+                    bestVersionId = versions.firstOrNull()?.id,
+                    isFavorite = true
+                )
+            }
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    private fun createDriveVersion(songId: String, versionId: String, title: String, artist: String): KaraokeVersion {
+        val cleanVideoId = versionId.removePrefix("gdrive_ver_").removePrefix("gdrive_").removePrefix("local_").trim()
+        val mediaUrl = if (cleanVideoId.isNotBlank()) "https://www.googleapis.com/drive/v3/files/$cleanVideoId?alt=media" else ""
+        return KaraokeVersion(
+            id = versionId.ifBlank { "gdrive_$songId" },
+            songId = songId,
+            source = SourceType.GOOGLE_DRIVE,
+            sourceVideoId = cleanVideoId,
+            title = "$artist — $title (Google Drive)",
+            videoUrl = mediaUrl,
+            embedUrl = mediaUrl,
+            quality = "MP4 / HD",
+            karaokeScore = 0.99f
+        )
+    }
+
+    fun clearPlaybackHistory() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                db.historyDao().clearPlaybackHistory()
+            }
+        }
+    }
 
     private val _popularSongs = MutableStateFlow<List<MockPopularItem>>(emptyList())
     val popularSongs: StateFlow<List<MockPopularItem>> = _popularSongs.asStateFlow()
@@ -281,6 +373,8 @@ class KaraokeViewModel(application: Application) : AndroidViewModel(application)
 
     fun triggerVoiceSearch(query: String) {
         _uiState.value = _uiState.value.copy(
+            isPlayerOpen = false,
+            selectedSongForDetails = null,
             selectedNavIndex = 1,
             searchQuery = query
         )

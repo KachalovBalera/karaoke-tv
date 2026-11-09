@@ -144,6 +144,7 @@ object WebAssets {
         <div class="remote-grid">
             <button class="big-btn big-btn-primary" onclick="controlPlayback('toggle')">⏯ ПАУЗА / ПЛЕЙ</button>
             <button class="big-btn" onclick="controlPlayback('skip')">⏭ СЛЕДУЮЩАЯ</button>
+            <button class="big-btn" style="background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #38bdf8; color: white;" onclick="triggerTvVoice()">🎙 ГОЛОСОВОЙ ПОИСК</button>
             <button class="big-btn" onclick="changeSingerName()">👤 СМЕНИТЬ ИМЯ</button>
             <button class="big-btn" style="grid-column: span 2; border-color: var(--danger); color: var(--danger);" onclick="clearAllQueue()">🗑 Очистить очередь</button>
         </div>
@@ -322,44 +323,99 @@ object WebAssets {
             } catch(e) {}
         }
 
+        function showToast(msg) {
+            let toast = document.getElementById('toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast';
+                toast.style.cssText = 'position:fixed;bottom:72px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,0.96);color:#fff;padding:12px 22px;border-radius:24px;border:1.5px solid #38bdf8;font-size:0.9rem;font-weight:600;z-index:9999;box-shadow:0 8px 30px rgba(0,0,0,0.6);text-align:center;max-width:90%;transition:opacity 0.3s ease;pointer-events:none;';
+                document.body.appendChild(toast);
+            }
+            toast.innerText = msg;
+            toast.style.opacity = '1';
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
+        }
+
+        async function triggerTvVoice() {
+            try {
+                await fetch('/api/playback/action?token=' + sessionToken, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'voice_tv' })
+                });
+                showToast("🎙 Голосовой поиск открыт на экране ТВ!");
+            } catch(e) {
+                showToast("Ошибка связи с ТВ");
+            }
+        }
+
         function startVoiceRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                alert('Голосовой поиск не поддерживается данным браузером. Откройте пульт в Google Chrome.');
-                return;
-            }
             const btn = document.getElementById('voiceBtn');
             const origText = btn ? btn.innerText : '🎙';
-            if (btn) btn.innerText = '🔴';
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'ru-RU';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-            recognition.onresult = function(event) {
+
+            function fallbackVoice() {
                 if (btn) btn.innerText = origText;
-                const text = event.results[0][0].transcript;
-                if (text && text.trim()) {
-                    document.getElementById('searchInput').value = text.trim();
-                    searchSongs();
-                    fetch('/api/remote/voice?token=' + sessionToken, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query: text.trim() })
-                    }).catch(function() {});
+                fetch('/api/playback/action?token=' + sessionToken, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'voice_tv' })
+                }).catch(function() {});
+
+                const input = document.getElementById('searchInput');
+                if (input) {
+                    input.focus();
                 }
-            };
-            recognition.onerror = function() {
-                if (btn) btn.innerText = origText;
-            };
-            recognition.onend = function() {
-                if (btn) btn.innerText = origText;
-            };
-            recognition.start();
+                showToast("🎙 Голосовой поиск открыт на ТВ! (Также можно нажать микрофон 🎙 на клавиатуре телефона)");
+            }
+
+            if (!SpeechRecognition) {
+                fallbackVoice();
+                return;
+            }
+
+            if (btn) btn.innerText = '🔴';
+            try {
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'ru-RU';
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+                let gotResult = false;
+                recognition.onresult = function(event) {
+                    gotResult = true;
+                    if (btn) btn.innerText = origText;
+                    const text = event.results && event.results[0] && event.results[0][0] && event.results[0][0].transcript;
+                    if (text && text.trim()) {
+                        const trimmed = text.trim();
+                        document.getElementById('searchInput').value = trimmed;
+                        searchSongs();
+                        showToast("🎙 Поиск: " + trimmed);
+                    }
+                };
+                recognition.onerror = function() {
+                    if (!gotResult) fallbackVoice();
+                };
+                recognition.onend = function() {
+                    if (btn) btn.innerText = origText;
+                };
+                recognition.start();
+            } catch(e) {
+                fallbackVoice();
+            }
         }
 
         async function searchSongs() {
             const query = document.getElementById('searchInput').value.trim();
             if (!query) return;
+
+            // Sync search with TV screen
+            fetch('/api/remote/voice?token=' + sessionToken, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: query })
+            }).catch(function() {});
+
             const results = document.getElementById('searchResults');
             results.innerHTML = '<div style="color: var(--text-muted); padding: 16px;">Поиск караоке в Google Drive...</div>';
             
@@ -411,11 +467,11 @@ object WebAssets {
                     })
                 });
                 if (res.ok) {
-                    alert('✓ «' + title + '» добавлена в очередь для ' + mySingerName + '!');
+                    showToast('✓ «' + title + '» добавлена в очередь!');
                     switchTab('tabQueue', document.querySelectorAll('.nav-item')[0]);
                 }
             } catch(e) {
-                alert('Не удалось добавить песню в очередь');
+                showToast('Не удалось добавить песню в очередь');
             }
         }
 
